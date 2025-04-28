@@ -106,10 +106,8 @@ class Agent(object):
         MODIFIED
         '''
         returns = discount_rewards(rewards, self.gamma)
-        #a=self.action_log_probs
-        #torch.from_numpy(np.ones((states.shape[0]))**np.arange(0,states.shape[0]))
         loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))
-                   **np.arange(0,states.shape[0]))*returns*action_log_probs).sum()
+                   **np.arange(0,states.shape[0])).to(self.train_device)*returns*action_log_probs).sum()
         self.optimizer.zero_grad()
         loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
 
