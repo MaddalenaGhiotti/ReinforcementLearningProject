@@ -59,3 +59,5 @@ if __name__ == '__main__':
 # - loggare i reward e vedere se il reward medio aumenta o per capire quanto va male la random policy
 # - stampare state e action per vedere come evolve il sistema
 # - confrontare i reward tra source e target
+
+#CIAO
