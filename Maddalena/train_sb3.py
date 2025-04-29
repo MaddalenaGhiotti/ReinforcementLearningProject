@@ -1,6 +1,8 @@
 """Sample script for training a control policy on the Hopper environment
    using stable-baselines3 (https://stable-baselines3.readthedocs.io/en/master/)
 
+    Prova
+
     Read the stable-baselines3 documentation and implement a training
     pipeline with an RL algorithm of your choice between PPO and SAC.
 """
