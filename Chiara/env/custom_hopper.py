@@ -3,6 +3,9 @@ domain randomization optimization.
     
     See more at: https://www.gymlibrary.dev/environments/mujoco/hopper/
 """
+
+#utilizzato per permettere l'allenamento di agenti in ambienti in cui le caratteristiche fisiche (come le masse dei vari componenti) 
+# cambiano in modo casuale ad ogni episodio. Questo è un approccio comune per migliorare la robustezza dell'agente
 from copy import deepcopy
 
 import numpy as np
@@ -16,10 +19,10 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         MujocoEnv.__init__(self, 4)
         utils.EzPickle.__init__(self)
 
-        self.original_masses = np.copy(self.sim.model.body_mass[1:])    # Default link masses
+        self.original_masses = np.copy(self.sim.model.body_mass[1:])    # Default link masses tranne la base
 
         if domain == 'source':  # Source environment has an imprecise torso mass (-30% shift)
-            self.sim.model.body_mass[1] *= 0.7
+            self.sim.model.body_mass[1] *= 0.7 #modificata la massa del torso (il corpo principale del robot) per simulare un errore nei dati
 
     def set_random_parameters(self):
         """Set random masses"""
@@ -38,15 +41,15 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         return
 
 
-    def get_parameters(self):
+    def get_parameters(self): #questa funzione restituisce le masse correnti del robot. Ignora la massa del corpo principale (indice 0)
         """Get value of mass for each link"""
         masses = np.array( self.sim.model.body_mass[1:] )
         return masses
 
 
-    def set_parameters(self, task):
+    def set_parameters(self, task): 
         """Set each hopper link's mass to a new value"""
-        self.sim.model.body_mass[1:] = task
+        self.sim.model.body_mass[1:] = task #array task (che contiene le masse campionate o fornite) viene usato per sostituire le masse correnti.
 
 
     def step(self, a):
@@ -61,10 +64,11 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         self.do_simulation(a, self.frame_skip)
         posafter, height, ang = self.sim.data.qpos[0:3]
         alive_bonus = 1.0
-        reward = (posafter - posbefore) / self.dt
+        reward = (posafter - posbefore) / self.dt #velocità
         reward += alive_bonus
-        reward -= 1e-3 * np.square(a).sum()
+        reward -= 1e-3 * np.square(a).sum() #penalità per l'uso delle azioni 
         s = self.state_vector()
+        #done determina se l'episodio è finito, in base a condizioni come l'altezza o l'angolo del corpo.
         done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and (height > .7) and (abs(ang) < .2))
         ob = self._get_obs()
 
@@ -124,6 +128,8 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
 
 """
     Registered environments
+    funzioni servono per registrare l'ambiente personalizzato (come il CustomHopper) con la libreria Gym,
+    salvo 3 diverse versioni: quella classica, quella con la massa del torso con errore e un'altra
 """
 gym.envs.register(
         id="CustomHopper-v0",

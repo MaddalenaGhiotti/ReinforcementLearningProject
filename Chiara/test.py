@@ -5,7 +5,7 @@ import torch
 import gym
 
 from env.custom_hopper import *
-from Letizia.agent import Agent, Policy
+from agent import Agent, Policy
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -32,9 +32,9 @@ def main():
 	action_space_dim = env.action_space.shape[-1]
 
 	policy = Policy(observation_space_dim, action_space_dim)
-	policy.load_state_dict(torch.load(args.model), strict=True)
+	policy.load_state_dict(torch.load(args.model), strict=True) # Carica i pesi pre-addestrati da un file .mdl (il percorso è passato come parametro --model
 
-	agent = Agent(policy, device=args.device)
+	agent = Agent(policy, device=args.device) #crea agente con la politica appena caricata
 
 	for episode in range(args.episodes):
 		done = False
@@ -43,11 +43,11 @@ def main():
 
 		while not done:
 
-			action, _ = agent.get_action(state, evaluation=True)
+			action, _ = agent.get_action(state, evaluation=True)#In modalità evaluation=True, l'agente restituisce l'azione media senza esplorazione.
 
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 
-			if args.render:
+			if args.render: 
 				env.render()
 
 			test_reward += reward

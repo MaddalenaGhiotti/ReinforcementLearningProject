@@ -7,10 +7,10 @@ import torch
 import gym
 
 from env.custom_hopper import *
-from Letizia.agent import Agent, Policy
+from agent import Agent, Policy
 
 
-def parse_args():
+def parse_args(): #Gestisce gli argomenti passati da riga di comando.
     parser = argparse.ArgumentParser()
     parser.add_argument('--n-episodes', default=100000, type=int, help='Number of training episodes')
     parser.add_argument('--print-every', default=20000, type=int, help='Print info every <> episodes')
@@ -23,7 +23,7 @@ args = parse_args()
 
 def main():
 
-	env = gym.make('CustomHopper-source-v0')
+	env = gym.make('CustomHopper-source-v0') #crea l'ambiente personalizzato e quindi usa le cose definite in custom hopper
 	# env = gym.make('CustomHopper-target-v0')
 
 	print('Action space:', env.action_space)
@@ -34,9 +34,10 @@ def main():
 	"""
 		Training
 	"""
-	observation_space_dim = env.observation_space.shape[-1]
+	observation_space_dim = env.observation_space.shape[-1] #Estrae le dimensioni degli spazi di osservazione e azione
 	action_space_dim = env.action_space.shape[-1]
 
+	#crea l'oggetto policy e oggetto agent che userà nella politica di addestramento
 	policy = Policy(observation_space_dim, action_space_dim)
 	agent = Agent(policy, device=args.device)
 
@@ -51,21 +52,23 @@ def main():
 
 		while not done:  # Loop until the episode is over
 
+			#l'agente seleziona un'azione
 			action, action_probabilities = agent.get_action(state)
 			previous_state = state
 
+			#l'azione viene eseguita nell'ambiente, che restituisce il nuovo stato e la ricompensa 
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
 
-			train_reward += reward
+			train_reward += reward #aggiorna punteggio cumulativo della reward
 		
 		if (episode+1)%args.print_every == 0:
 			print('Training episode:', episode)
 			print('Episode return:', train_reward)
 
 
-	torch.save(agent.policy.state_dict(), "model.mdl")
+	torch.save(agent.policy.state_dict(), "model.mdl") #salvataggio del modello
 
 	
 

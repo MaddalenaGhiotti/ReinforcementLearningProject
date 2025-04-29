@@ -17,7 +17,9 @@ except ImportError as e:
 DEFAULT_SIZE = 500
 
 
-def convert_observation_to_space(observation):
+def convert_observation_to_space(observation): #guarda come sono fatte le osservazioni (observation) 
+                                                #e crea il tipo corretto di spazio (gym.Space) che le descrive.
+
     if isinstance(observation, dict):
         space = spaces.Dict(OrderedDict([
             (key, convert_observation_to_space(value))
@@ -39,7 +41,7 @@ class MujocoEnv(gym.Env):
 
     def __init__(self, frame_skip):
 
-        self.frame_skip = frame_skip
+        self.frame_skip = frame_skip #quanti passi simula una azione 
         self.build_model()
         self.data = self.sim.data
 
@@ -48,12 +50,12 @@ class MujocoEnv(gym.Env):
             'video.frames_per_second': int(np.round(1.0 / self.dt))
         }
 
-        self.init_qpos = self.sim.data.qpos.ravel().copy()
+        self.init_qpos = self.sim.data.qpos.ravel().copy() #registra posizione e velocità iniziale
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self._set_action_space()
+        self._set_action_space() #cosa può fare l'agente
 
-        action = self.action_space.sample()
+        action = self.action_space.sample() #prova azione random per vedere che funzioni 
         observation, _reward, done, _info = self.step(action)
         assert not done
 
@@ -62,12 +64,12 @@ class MujocoEnv(gym.Env):
         self.seed()
 
     def build_model(self):
-        self.model = mujoco_py.load_model_from_path(os.path.join(os.path.dirname(__file__), "assets/hopper.xml"))
-        self.sim = mujoco_py.MjSim(self.model)
+        self.model = mujoco_py.load_model_from_path(os.path.join(os.path.dirname(__file__), "assets/hopper.xml")) #modello fisico
+        self.sim = mujoco_py.MjSim(self.model) #simulatore
         self.viewer = None
         self._viewers = {}
 
-    def _set_action_space(self):
+    def _set_action_space(self): #definisce cosa puo fare l'agente in base ai limiti
         bounds = self.model.actuator_ctrlrange.copy().astype(np.float32)
         low, high = bounds.T
         self.action_space = spaces.Box(low=low, high=high, dtype=np.float32)
@@ -87,11 +89,11 @@ class MujocoEnv(gym.Env):
     def reset_model(self):
         """
         Reset the robot degrees of freedom (qpos and qvel).
-        Implement this in each subclass.
+        Implement this in each subclass. #definito in custom_hopper
         """
         raise NotImplementedError
 
-    def viewer_setup(self):
+    def viewer_setup(self): #per modificare la visuale della telecamera quando osservi la simulazione (render()).
         """
         This method is called when the viewer is initialized.
         Optionally implement this method, if you need to tinker with camera position
@@ -101,12 +103,12 @@ class MujocoEnv(gym.Env):
 
     # -----------------------------
 
-    def reset(self):
+    def reset(self): #resetta il simulatore fisico
         self.sim.reset()
-        ob = self.reset_model()
+        ob = self.reset_model() #definito in custom_hopper 
         return ob
 
-    def set_state(self, qpos, qvel):
+    def set_state(self, qpos, qvel): #Imposta direttamente la posizione (qpos) e velocità (qvel) del robot, bypassando i comandi normali.
         assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)
         old_state = self.sim.get_state()
         new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel,
@@ -115,12 +117,12 @@ class MujocoEnv(gym.Env):
         self.sim.forward()
 
     @property
-    def dt(self):
+    def dt(self): #Restituisce la durata reale di ogni "step" simulato
         return self.model.opt.timestep * self.frame_skip
 
     def do_simulation(self, ctrl, n_frames):
-        self.sim.data.ctrl[:] = ctrl
-        for _ in range(n_frames):
+        self.sim.data.ctrl[:] = ctrl # "ctrl" sono i valori numerici che diciamo al robot di applicare sui motori.
+        for _ in range(n_frames): #simula
             self.sim.step()
 
     def render(self,
@@ -158,13 +160,13 @@ class MujocoEnv(gym.Env):
         elif mode == 'human':
             self._get_viewer(mode).render()
 
-    def close(self):
+    def close(self): #Chiude il viewer grafico per liberare memoria.
         if self.viewer is not None:
             # self.viewer.finish()
             self.viewer = None
             self._viewers = {}
 
-    def _get_viewer(self, mode):
+    def _get_viewer(self, mode): #Crea il viewer (grafico) per il rendering se non esiste ancora.usato da render
         self.viewer = self._viewers.get(mode)
         if self.viewer is None:
             if mode == 'human':
@@ -176,10 +178,10 @@ class MujocoEnv(gym.Env):
             self._viewers[mode] = self.viewer
         return self.viewer
 
-    def get_body_com(self, body_name):
+    def get_body_com(self, body_name): #ritorna il centro di massa di un sistema
         return self.data.get_body_xpos(body_name)
 
-    def state_vector(self):
+    def state_vector(self): #restituisce posizione e velocità 
         return np.concatenate([
             self.sim.data.qpos.flat,
             self.sim.data.qvel.flat
