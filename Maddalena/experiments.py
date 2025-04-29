@@ -4,11 +4,6 @@ import matplotlib.pyplot as plt
 
 
 print('ciao a tutti')
-
-
-
-
-
 print('hello')
 
 def plot_returns(return_array):
