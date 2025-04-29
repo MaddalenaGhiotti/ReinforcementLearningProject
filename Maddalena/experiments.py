@@ -9,6 +9,11 @@ print('Ce la faremo?')
 print('siiiuuuuu')
 print('fcr')
 
+
+
+
+print('hello')
+
 def plot_returns(return_array):
 	
     plt.figure(figsize=(15,10))
