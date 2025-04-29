@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from env.custom_hopper import *
-from Letizia.agent import Agent, Policy
+from agent import Agent, Policy
 
 def parse_args():  # parsing vuol dire che stiamo prendendo gli argomenti da terminale
     parser = argparse.ArgumentParser()
