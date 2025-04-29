@@ -7,6 +7,7 @@ print('ciao a tutti')
 print('ciao a tutti 3')
 print('Ce la faremo?')
 print('siiiuuuuu')
+print('fcr')
 
 def plot_returns(return_array):
 	
