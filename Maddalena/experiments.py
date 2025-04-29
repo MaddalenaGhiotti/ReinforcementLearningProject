@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+print('ciao a tutti')
+print('ciao a tutti 3')
+
 def plot_returns(return_array):
 	
     plt.figure(figsize=(15,10))
@@ -11,7 +14,7 @@ def plot_returns(return_array):
     plt.xlabel('Episode')
     plt.ylabel('Return')
     plt.grid()
-    plt.savefig('Return',dpi=300)
+    #plt.savefig('Return',dpi=300)
 
     plt.figure(figsize=(15,10))
     plt.title('CUMULATIVE RETURN')
@@ -19,7 +22,7 @@ def plot_returns(return_array):
     plt.xlabel('Episode')
     plt.ylabel('Cumulative return')
     plt.grid()
-    plt.savefig('CumulativeReturn',dpi=300)
+    #plt.savefig('CumulativeReturn',dpi=300)
 	
 
 def parse_args():
