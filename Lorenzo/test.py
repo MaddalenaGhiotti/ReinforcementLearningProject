@@ -5,7 +5,7 @@ import torch
 import gym
 
 from env.custom_hopper import *
-from Letizia.agent import Agent, Policy
+from agent import Agent, Policy
 
 def parse_args():
     parser = argparse.ArgumentParser()
