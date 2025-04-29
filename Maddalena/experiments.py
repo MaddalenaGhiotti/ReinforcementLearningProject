@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 print('ciao a tutti')
 print('ciao a tutti 3')
+print('Ce la faremo?')
 
 def plot_returns(return_array):
 	
