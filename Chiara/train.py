@@ -1,5 +1,5 @@
 """Train an RL agent on the OpenAI Gym Hopper environment using
-    REINFORCE and Actor-critic algorithms
+    REINFORCE and Actor-critic algorithms???
 """
 import argparse
 
