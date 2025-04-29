@@ -15,12 +15,13 @@ from agent import Agent, Policy
 
 def parse_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--n_episodes', default=15000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
-	parser.add_argument('--print_every', default=3000, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
+	parser.add_argument('--n_episodes', default=100000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
+	parser.add_argument('--print_every', default=10000, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
 	parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
 	parser.add_argument('--plot', default=True, action='store_true', help='Plot the returns')  ###DEFAULT: False
 	parser.add_argument('--plot_every', default=75, type=int, help='Plot return every <> episodes')  ###DEFAULT: 500
 	parser.add_argument('--trained_model', default=None, type=str, help='Trained policy path')
+	parser.add_argument('--threshold', default=500, type=int, help='Return threshold for early model saving')
 	parser.add_argument('--baseline', default=0, type=int, help='Value of REINFORCE baseline')  ###DEFAULT: 0
 
 	return parser.parse_args()
@@ -72,6 +73,7 @@ def main():
 	average_beginning = []
 	every_return = np.zeros((args.plot_every*2))
 	sum_returns = 0
+	threshold_bool = False
 
 	#Iterate over episodes (print progress bar in terminal)
 	for episode in tqdm(range(args.n_episodes)):
@@ -101,6 +103,12 @@ def main():
 			returns.append(train_reward)
 			average_returns.append(every_return.mean())
 			average_beginning.append(sum_returns/(episode+1))
+
+		#Save a partial model if return over threshold
+		if not threshold_bool and every_return.mean()>args.threshold:
+			print('Threshold reached')
+			torch.save(agent.policy.state_dict(), f"models/{model_name}_t{episode}.mdl")
+			threshold_bool = True
 
 		#Update policy
 		agent.update_policy()

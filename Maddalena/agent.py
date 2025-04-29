@@ -107,10 +107,14 @@ class Agent(object):
         MODIFIED
         '''
         returns = discount_rewards(rewards, self.gamma)
-        loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))
-                   **np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
+        returns -= returns.mean()
+        returns/= returns.std()
+
+        loss_fn =-torch.mean(action_log_probs * returns)
+        #loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
         self.optimizer.zero_grad()
         loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)
         self.optimizer.step()   #Compute a step of the optimization algorithm
 
 
