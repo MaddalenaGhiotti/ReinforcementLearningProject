@@ -126,17 +126,18 @@ class Agent(object):
             #   - compute boostrapped discounted return estimates
             _, state_values = self.policy(states)                # V(s_t)
             _, next_state_values = self.policy(next_states)      # V(s_{t+1})
-            returns = rewards + self.gamma * next_state_values.squeeze(-1) * (1 - done)  # if done=1 → no bootstrapping
-            returns = returns.detach()  # Detach from the graph to avoid backpropagation through the next state value
+
+            done = done.float()
+            td_target = rewards + self.gamma * next_state_values.squeeze(-1) * (1 - done)  # if done=1 → no bootstrapping
+            td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
 
             #   - compute advantage terms
-            advantages = returns - state_values.squeeze(-1)  # A(s_t, a_t) = R_t + V(s_{t+1}) - V(s_t)
-            advantages = advantages.detach()  # Detach from the graph to avoid backpropagation through the state value
+            td_error = td_target - state_values.squeeze(-1)  # delta(s_t, a_t) = R_t + gamma*V(s_{t+1}) - V(s_t)
 
             #   - compute actor loss and critic loss
             action_log_probs = action_log_probs.squeeze(-1)
-            actor_loss = -torch.mean(action_log_probs * advantages)
-            critic_loss = F.mse_loss(state_values.squeeze(-1), returns)
+            actor_loss = -torch.mean(action_log_probs * td_error)
+            critic_loss = F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
 
             #   - compute gradients and step the optimizer
             self.optimizer.zero_grad()
