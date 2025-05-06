@@ -5,29 +5,28 @@ import argparse
 import numpy as np
 import torch
 import gym
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 
-
 from env.custom_hopper import *
 from agent import Agent, Policy
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n-episodes', default=100000, type=int, help='Number of training episodes')
     parser.add_argument('--print-every', default=20000, type=int, help='Print info every <> episodes')
-    parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
-
+    parser.add_argument('--device', default='cpu', type=str, help='Network device [cpu, cuda]')
+    parser.add_argument('--algorithm', default='reinforce', type=str, help='Algorithm to use [reinforce, actor-critic]')
     return parser.parse_args()
 
-args = parse_args()
-returns_list_train = []
 
-def main():
+def main(args):
     env = gym.make('CustomHopper-source-v0')
     # env = gym.make('CustomHopper-target-v0')
     start_time = time.time()
-
 
     print('Action space:', env.action_space)
     print('State space:', env.observation_space)
@@ -39,12 +38,15 @@ def main():
     policy = Policy(observation_space_dim, action_space_dim)
     agent = Agent(policy, device=args.device)
 
+    returns_list_train = []       # lista dei reward per episodio
+    mean_returns_train = []       # lista delle medie ogni N episodi
+
     for episode in range(args.n_episodes):
         done = False
         train_reward = 0
-        state = env.reset()  # Reset the environment and observe the initial state
+        state = env.reset()
 
-        while not done:  # Loop until the episode is over
+        while not done:
             action, action_probabilities = agent.get_action(state)
             previous_state = state
 
@@ -54,31 +56,34 @@ def main():
             train_reward += reward
 
         returns_list_train.append(train_reward)
-        agent.update_policy()
+        agent.update_policy(algorithm=args.algorithm)
 
         if (episode + 1) % args.print_every == 0:
-            print('Training episode:', episode)
-            print('Episode return:', train_reward)
+            mean_return = np.mean(returns_list_train[-args.print_every:])
+            mean_returns_train.append(mean_return)
+            print('Training episode:', episode + 1)
+            print(f'Mean return (last {args.print_every} episodes): {mean_return:.2f}')
+
     end_time = time.time()
-    print(f"\nTraining completed in {(end_time-start_time) / 60:.2f} minutes ({(end_time-start_time):.2f} seconds).")	
+    print(f"\nTraining completed in {(end_time - start_time) / 60:.2f} minutes ({(end_time - start_time):.2f} seconds).")
 
-
-    # save model and returns
+    # Save model and returns
     torch.save(agent.policy.state_dict(), "model.mdl")
-    np.save("returns.npy", np.array(returns_list_train))
+    np.save("returns.npy", np.array(mean_returns_train))
 
-    # Plot returns
+    # Plot average returns
     plt.figure(figsize=(10, 6))
-    plt.plot(range(1, args.n_episodes + 1), returns_list_train, marker='o', linestyle='-', color='blue', label='Training Return')
+    x = np.arange(args.print_every, args.n_episodes + 1, args.print_every)
+    plt.plot(x, mean_returns_train, marker='o', linestyle='-', label='Mean Return')
     plt.xlabel('Episode')
-    plt.ylabel('Return')
-    plt.title('Training Return over Episodes (Actor-Critic)')
+    plt.ylabel('Average Return')
+    plt.title(f'Average Training Return over Episodes ({args.algorithm})')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("/mnt/c/Users/letig/Desktop/MachineLearning/progetto/ReinforcementLearningProject/training_returns_plot.png")
-  
+    plt.savefig("plots/training_returns_plot.png")
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args)

@@ -3,6 +3,8 @@ import argparse
 import torch
 import gym
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from env.custom_hopper import *
@@ -14,12 +16,13 @@ def parse_args():  # parsing vuol dire che stiamo prendendo gli argomenti da ter
     parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
     parser.add_argument('--render', default=False, action='store_true', help='Render the simulator')
     parser.add_argument('--episodes', default=10, type=int, help='Number of test episodes')
+    parser.add_argument('--algorithm', default='actor-critic', type=str, help='Algorithm to use [reinforce, actor-critic]')
 
     return parser.parse_args()
 
 args = parse_args()
 
-def main():
+def main(args):
     env = gym.make('CustomHopper-source-v0')
     # env = gym.make('CustomHopper-target-v0')
 
@@ -59,12 +62,13 @@ def main():
     plt.plot(range(args.episodes), test_returns, marker='o', linestyle='-', color='green', label='Test Episode Return')
     plt.xlabel('Test Episode')
     plt.ylabel('Return')
-    plt.title('Test Return over Episodes (Actor-Critic)')
+    plt.title(f'Test Return over Episodes ({args.algorithm})')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("/mnt/c/Users/letig/Desktop/MachineLearning/progetto/ReinforcementLearningProject/test_returns_plot.png")  
+    plt.savefig("plots/test_returns_plot.png")  
     
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args)
