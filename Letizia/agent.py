@@ -81,10 +81,10 @@ class Agent(object):
     def __init__(self, policy, device='cpu'):
         self.train_device = device
         self.policy = policy.to(self.train_device)
-        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-2)
         
 
-        self.gamma = 0.99
+        self.gamma = 0.9
         self.states = []
         self.next_states = []
         self.action_log_probs = []
@@ -132,19 +132,25 @@ class Agent(object):
             td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
 
             #   - compute advantage terms
-            td_error = td_target - state_values.squeeze(-1)  # delta(s_t, a_t) = R_t + gamma*V(s_{t+1}) - V(s_t)
+            td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
+            td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error
 
             #   - compute actor loss and critic loss
             action_log_probs = action_log_probs.squeeze(-1)
             actor_loss = -torch.mean(action_log_probs * td_error)
             critic_loss = F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
 
-            #   - compute gradients and step the optimizer
+            #   - compute gradients and step the optimizer        
+
             self.optimizer.zero_grad()
             (actor_loss + critic_loss).backward()
+
+            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
+
             self.optimizer.step()
 
-            #
+
+            
         return        
 
 
