@@ -73,3 +73,13 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    """"Per caricare i modelli in seguito
+    from stable_baselines3 import PPO
+
+# Carica modello finale
+model = PPO.load("ppo_hopper_final")
+
+# Carica modello migliore
+model = PPO.load("./ppo_hopper_best_model/best_model")
+"""
