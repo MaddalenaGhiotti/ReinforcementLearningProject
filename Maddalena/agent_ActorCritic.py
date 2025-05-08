@@ -38,17 +38,6 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         init_sigma = 0.5
         self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
 
-
-        """
-            Critic network
-        
-        # TASK 3: critic network for actor-critic algorithm
-        self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
-        self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
-        self.fc3_critic_value = torch.nn.Linear(self.hidden, 1)
-        """
-
-
         self.init_weights()
 
 
@@ -69,25 +58,57 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
 
         sigma = self.sigma_activation(self.sigma)
         normal_dist = Normal(action_mean, sigma)   #Normalized policy outputs (probabilities of actions)
+        
+        return normal_dist
+    
 
+
+class Value(torch.nn.Module):
+    def __init__(self, state_space, action_space):
+        super().__init__()
+        self.state_space = state_space   #Attribute: state space
+        self.action_space = action_space   #Attribute: action space
+        self.hidden = 64   #Attribute: number of nodes in hidden layers
+        self.tanh = torch.nn.Tanh()   #Attribute: activation function
 
         """
+            Critic network
+        """
+        # TASK 3: critic network for actor-critic algorithm
+        self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
+        self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
+        self.fc3_critic_value = torch.nn.Linear(self.hidden, 1)
+
+
+        self.init_weights()
+
+
+    def init_weights(self):
+        for m in self.modules():
+            if type(m) is torch.nn.Linear:
+                torch.nn.init.normal_(m.weight)
+                torch.nn.init.zeros_(m.bias)
+
+
+    def forward(self, x):
+        """
             Critic
-        
+        """
         # TASK 3: forward in the critic network
         x_critic = self.tanh(self.fc1_critic(x))
         x_critic = self.tanh(self.fc2_critic(x_critic))
         critic_value = self.fc3_critic_value(x_critic)
-        """
         
-        return normal_dist
+        return critic_value
 
 
 class Agent(object):
-    def __init__(self, policy, device='cpu', baseline=0):
+    def __init__(self, policy, value, device='cpu', baseline=0):
         self.train_device = device
         self.policy = policy.to(self.train_device)
-        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
+        self.value = value.to(self.train_device)
+        self.optimizer_policy = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
+        self.optimizer_value = torch.optim.Adam(value.parameters(), lr=1e-3)   #Optimization algorithm on the value parameters
 
         self.gamma = 0.99   #Discount factor
         self.states = []
@@ -111,8 +132,8 @@ class Agent(object):
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
         
         '''
-        MODIFIED
-        '''
+        OLD    
+
         returns = discount_rewards(rewards, self.gamma)
         returns -= returns.mean()
         returns/= returns.std()
@@ -123,6 +144,27 @@ class Agent(object):
         loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
         torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
         self.optimizer.step()   #Compute a step of the optimization algorithm
+        '''
+
+        #   - compute boostrapped discounted return estimates
+        #   - compute advantage terms
+
+        value_states = self.value(states)
+        advantage_term = rewards+self.gamma*self.value(next_states)-value_states #Is it necessary to impose that the value at terminal state is zero?
+        actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
+        critic_loss_fn = -torch.mean(value_states*advantage_term)
+
+        # ACTOR: compute gradients and step the optimizer
+        self.optimizer_policy.zero_grad()
+        actor_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
+        self.optimizer_policy.step()   #Compute a step of the optimization algorithm
+
+        # CRITIC: compute gradients and step the optimizer
+        self.optimizer_value.zero_grad()
+        critic_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+        torch.nn.utils.clip_grad_norm_(self.value.parameters(),1)   #Bring gradient norm to 1 if bigger
+        self.optimizer_value.step()   #Compute a step of the optimization algorithm
 
 
         #
@@ -141,7 +183,7 @@ class Agent(object):
         #   - compute gradients and step the optimizer
         #
 
-        return        
+        return      
 
 
     def get_action(self, state, evaluation=False):

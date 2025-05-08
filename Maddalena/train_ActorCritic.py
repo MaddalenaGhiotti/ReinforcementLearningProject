@@ -1,10 +1,13 @@
 """Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE and Actor-critic algorithms
+
+	Implement:
+	- Threshold che aumenta man mano automaticamete, sulla base delle performance
+	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato
 """
 import argparse
 import matplotlib.pyplot as plt
 from datetime import datetime
-from pathlib import Path
 
 import torch
 import gym
@@ -16,8 +19,8 @@ from agent import Agent, Policy
 
 def parse_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--n_episodes', default=5000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
-	parser.add_argument('--print_every', default=500, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
+	parser.add_argument('--n_episodes', default=50000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
+	parser.add_argument('--print_every', default=5000, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
 	parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
 	parser.add_argument('--plot', default=True, action='store_true', help='Plot the returns')  ###DEFAULT: False
 	parser.add_argument('--plot_every', default=75, type=int, help='Plot return every <> episodes')  ###DEFAULT: 500
@@ -45,10 +48,9 @@ def plot_returns(numbers_array,return_array, average_array, beginning_array, poi
 
 
 def main():
-	Path.mkdir(Path('./models'),exist_ok=True)
-	Path.mkdir(Path('./plots'),exist_ok=True)
+
 	#Define model name based on timestamp
-	model_name = f'Reinforce_{args.n_episodes}_b{args.baseline}_'+datetime.now().strftime('%y%m%d_%H-%M-%S')
+	model_name = f'ActorCritic_{args.n_episodes}_b{args.baseline}_'+datetime.now().strftime('%y%m%d_%H-%M-%S')
 
 	env = gym.make('CustomHopper-source-v0')
 	# env = gym.make('CustomHopper-target-v0')
