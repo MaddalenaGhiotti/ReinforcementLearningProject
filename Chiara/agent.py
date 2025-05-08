@@ -40,6 +40,11 @@ class Policy(torch.nn.Module):
         """
             Critic network: il critico cerca di stimare il valore (o la "votazione") dello stato dato.
             Questo valore viene usato per calcolare l'advantage (vantaggio) che è la differenza tra il ritorno scontato e il valore predetto dallo stato.
+            # Critic network
+        self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
+        self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
+        self.fc3_critic_value = torch.nn.Linear(self.hidden, 1)
+
         """
         # TASK 3: critic network for actor-critic algorithm
 
@@ -70,6 +75,15 @@ class Policy(torch.nn.Module):
 
         """
             Critic
+        # Critic network
+       # Critic
+        x_critic = self.tanh(self.fc1_critic(x))
+        x_critic = self.tanh(self.fc2_critic(x_critic))
+        state_value = self.fc3_critic_value(x_critic).squeeze(-1)  # Output: scalare
+
+        return normal_dist, state_value
+
+            
         """
         # TASK 3: forward in the critic network
 
@@ -104,6 +118,17 @@ class Agent(object):
 
         #
         # TASK 2:
+        returns = discount_rewards(rewards, self.gamma)
+        returns -= returns.mean()
+        returns/= returns.std()
+
+        loss_fn =-torch.mean(action_log_probs * returns)
+        #loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
+        self.optimizer.zero_grad()
+        loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)
+        self.optimizer.step()   #Compute a step of the optimization algorithm
+
         #   - compute discounted returns
         #   - Calcola le ricompense scontate (usando `discount_rewards`)
         #   - compute policy gradient loss function given actions and returns
@@ -134,6 +159,32 @@ class Agent(object):
         #   - compute advantage terms
         #   - compute actor loss and critic loss
         #   - compute gradients and step the optimizer
+        """# Compute value estimates from critic
+        _, state_values = self.policy(states)
+        _, next_state_values = self.policy(next_states)
+
+        # Compute targets using bootstrapped returns:
+        # G_t = r_t + γ * V(s_{t+1}) * (1 - done)
+        targets = rewards + self.gamma * next_state_values * (1 - done)
+
+        # Compute advantage: A_t = G_t - V(s_t)
+        advantages = targets.detach() - state_values
+
+        # Actor loss (Policy Gradient): maximize advantage × log_prob
+        actor_loss = -torch.mean(action_log_probs * advantages.detach())
+
+        # Critic loss (Mean Squared Error)
+        critic_loss = F.mse_loss(state_values, targets.detach())
+
+        # Total loss
+        total_loss = actor_loss + critic_loss
+
+        # Optimization step
+        self.optimizer.zero_grad()
+        total_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1)
+        self.optimizer.step()
+        """
         #
 
         return        
