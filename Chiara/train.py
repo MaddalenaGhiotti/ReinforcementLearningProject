@@ -59,9 +59,10 @@ def main():
 			#l'azione viene eseguita nell'ambiente, che restituisce il nuovo stato e la ricompensa 
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 
-			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
-
+			agent.store_outcome(previous_state, state, action_probabilities, reward, done) # qui crea traiettoria
 			train_reward += reward #aggiorna punteggio cumulativo della reward
+
+			
 		
 		if (episode+1)%args.print_every == 0:
 			print('Training episode:', episode)
