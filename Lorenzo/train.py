@@ -79,6 +79,7 @@ def main():
 	for episode in tqdm(range(args.n_episodes)):
 		done = False
 		train_reward = 0
+		env.set_random_parameters()
 		state = env.reset()  # Reset the environment and observe the initial state
 
 		#Build trajectory

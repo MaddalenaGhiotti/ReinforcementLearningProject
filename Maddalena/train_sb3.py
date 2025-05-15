@@ -15,6 +15,7 @@ from tqdm import tqdm
 from env.custom_hopper import *
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,6 +46,7 @@ def main():
     test_env = gym.make(f'CustomHopper-{args.env_test}-v0')
     train_env.seed(args.random_state)
     test_env.seed(args.random_state)
+    train_env = Monitor(train_env, filename='PPOresults/'+model_name)
     
     print('State space:', train_env.observation_space)  # state-space
     print('Action space:', train_env.action_space)  # action-space

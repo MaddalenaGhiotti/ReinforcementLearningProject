@@ -97,6 +97,7 @@ def main():
 		done = False
 		train_reward = 0
 		state = env.reset()  # Reset the environment and observe the initial state
+		env.set_random_parameters()
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
