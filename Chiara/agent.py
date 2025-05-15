@@ -34,8 +34,8 @@ class Policy(torch.nn.Module):
         # Learned standard deviation for exploration at training time 
         self.sigma_activation = F.softplus #per avere sigma>=0
         init_sigma = 0.5
-        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
-
+        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma) #non è un layer. La deviazione standard la aggiorno insieme ai pesi del neural network.
+                                                                                   #mentre per la media aggiorno i pesi della rete. Voglio sigma indipendente dallo stato, mentre la media dipende dalo stato. Sigma è parametro di esplorazione, non dipende da dove sei                                       
 
         """
             Critic network: il critico cerca di stimare il valore (o la "votazione") dello stato dato.
@@ -118,55 +118,43 @@ class Agent(object):
 
         #
         # TASK 2:
-        returns = discount_rewards(rewards, self.gamma)
+        returns = discount_rewards(rewards, self.gamma) #trova la G, vettore in cui in ogni posizione c'è la G_t
         returns -= returns.mean()
-        returns/= returns.std()
+        returns/= returns.std() #così l'ho normalizzato
 
-        loss_fn =-torch.mean(action_log_probs * returns)
+        loss_fn =-torch.mean(action_log_probs * returns) #loss della rete neurale per aggiornare i teta 
         #loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad() #riazzera
         loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
         torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)
-        self.optimizer.step()   #Compute a step of the optimization algorithm
+        self.optimizer.step()   #Compute a step of the optimization algorithm. Aggiornamento di theta
 
         #   - compute discounted returns
         #   - Calcola le ricompense scontate (usando `discount_rewards`)
         #   - compute policy gradient loss function given actions and returns
         #   - compute gradients and step the optimizer
         
-        #BASE
-        # 1. Calcola i ritorni scontati
-        #returns = discount_rewards(rewards, self.gamma)
-
-        # 2. Normalizza i ritorni per stabilità numerica
-        #returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-
-        # 3. Calcola la loss: log_prob * return (con segno meno perché vogliamo minimizzare)
-        #loss = - (action_log_probs * returns).sum()
-
-        # 4. Ottimizzazione
-        #self.optimizer.zero_grad()
-        #loss.backward()
-        #self.optimizer.step()"
-        #
+       
         #CON BASELINE
         #madda
 
 
         #
-        # TASK 3:
+        # TASK 3: AGGIUNGERE VARIABILE PER DIRE SE FARE SOLO ACTOR (REINFORCE) O ENTRAMBI 
         #   - compute boostrapped discounted return estimates
         #   - compute advantage terms
         #   - compute actor loss and critic loss
         #   - compute gradients and step the optimizer
         """# Compute value estimates from critic
-        _, state_values = self.policy(states)
+        _, state_values = self.policy(states)       #CHIAMO LA FUNZIONE FORWARD DEL NETWORW policy (scorciatoia)
         _, next_state_values = self.policy(next_states)
 
         # Compute targets using bootstrapped returns:
         # G_t = r_t + γ * V(s_{t+1}) * (1 - done)
         targets = rewards + self.gamma * next_state_values * (1 - done)
 
+        #detach serve per dire che quella nvariabile non deve essere vista come parametro, così nel calcolo dei gradienti non di tiene in conto
+        #tipo: se tu hai usato i parametri per calcolare l'advantage, torch ti calcolerebbe il gradiente anche sue quyello. 
         # Compute advantage: A_t = G_t - V(s_t)
         advantages = targets.detach() - state_values
 
@@ -174,18 +162,24 @@ class Agent(object):
         actor_loss = -torch.mean(action_log_probs * advantages.detach())
 
         # Critic loss (Mean Squared Error)
-        critic_loss = F.mse_loss(state_values, targets.detach())
+
+        SISTEMARE IL CODICE GUARDARE LETI
+        #critic_loss = F.mse_loss(state_values, targets.detach())
+        critic_loss = -torch.mean(state_values* targets.detach())
 
         # Total loss
-        total_loss = actor_loss + critic_loss
+        total_loss = actor_loss + critic_loss #nel policy hai prima actor poi critic, qui non è un + effettivo ma una sequenza: 
+                                              # quando si fa optimization, quando l'opt si applica ad actor loss, esso va ad aggiornare 
+                                              #i parametri che sono stati usati per calcolare quella loss, e ugualmente per il critic. 
+                                              #volendo si può anche fare con due ottimizzatori separati 
 
         # Optimization step
         self.optimizer.zero_grad()
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1)
-        self.optimizer.step()
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 1) #clippa il gradiente:se ha norma >1
+        self.optimizer.step() #pythotch genera tutti i parametri della rete, sia dell'actor che del critic
         """
-        #
+        
 
         return        
 
@@ -208,7 +202,7 @@ class Agent(object):
             return action, action_log_prob
 
 
-    def store_outcome(self, state, next_state, action_log_prob, reward, done):
+    def store_outcome(self, state, next_state, action_log_prob, reward, done): #chiamato nel train
         self.states.append(torch.from_numpy(state).float())
         self.next_states.append(torch.from_numpy(next_state).float())
         self.action_log_probs.append(action_log_prob)

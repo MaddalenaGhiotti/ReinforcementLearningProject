@@ -151,3 +151,14 @@ gym.envs.register(
         kwargs={"domain": "target"}
 )
 
+
+
+"""il SOURCE domain è l'ambiente semplificato o simulato che non rappresenta perfettamente il mondo reale.
+    in questo caso è un simulatore imperfetto che altera la massa del torso della ga,ba del 30%,
+    come accadrebbe nel mondo reale quando abbiamo errori nei parametri fisici nel simulatore.
+
+    Il TARGET domain rappresenta l'ambiente vero o comunque più realistico/corretto.
+    non altera le masse, è l'ambiente dove vogliamo che l'agente funzioni bene.
+
+    In un contesto sim-to-real, il target è il robot nel mondo reale, e il source è il simulatore impreciso
+"""
