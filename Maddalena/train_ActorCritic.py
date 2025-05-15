@@ -4,10 +4,13 @@
 	Implement:
 	- Threshold che aumenta man mano automaticamete, sulla base delle performance
 	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato
+	- Mettere azioni dipendenti tra loro (?)
 """
 import argparse
 import matplotlib.pyplot as plt
 from datetime import datetime
+from pathlib import Path
+import random
 
 import torch
 import gym
@@ -49,11 +52,23 @@ def plot_returns(numbers_array,return_array, average_array, beginning_array, poi
 
 def main():
 
+	# Seed setting
+	random.seed(args.random_state)
+	np.random.seed(args.random_state)
+	torch.manual_seed(args.random_state)
+	torch.cuda.manual_seed_all(args.random_state)
+
+	# Make directory if it does not exist
+	Path.mkdir(Path('./models'),exist_ok=True)
+	Path.mkdir(Path('./plots'),exist_ok=True)
 	#Define model name based on timestamp
 	model_name = f'ActorCritic_{args.n_episodes}_b{args.baseline}_'+datetime.now().strftime('%y%m%d_%H-%M-%S')
 
+	#Make environment
 	env = gym.make('CustomHopper-source-v0')
-	# env = gym.make('CustomHopper-target-v0')
+	env_target = gym.make('CustomHopper-target-v0')
+	env.seed(args.random_state)
+	env_target.seed(args.random_state)
 
 	print('Action space:', env.action_space)
 	print('State space:', env.observation_space)
@@ -62,12 +77,14 @@ def main():
 	observation_space_dim = env.observation_space.shape[-1]
 	action_space_dim = env.action_space.shape[-1]
 
+	#Create policy
 	policy = Policy(observation_space_dim, action_space_dim)
 
 	#Start from a pre-trained policy
 	if args.trained_model:
 		policy.load_state_dict(torch.load(args.trained_model), strict=True)
 	
+	#Create agent
 	agent = Agent(policy, device=args.device, baseline=args.baseline)
 
 	#Initialize data structures for plot data
@@ -91,6 +108,8 @@ def main():
 			previous_state = state
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
+			#Update policy
+			agent.update_policy()
 			train_reward += reward
 		
 		#Print progress and save partial model every print_every episodes
@@ -113,9 +132,6 @@ def main():
 			print('Threshold reached')
 			torch.save(agent.policy.state_dict(), f"models/{model_name}_t{episode}.mdl")
 			threshold_bool = True
-
-		#Update policy
-		agent.update_policy()
 
 	#Print the average of the last episodes' returns
 	print(f'Average of the last {args.plot_every*2} returns: {average_returns[-1]}')

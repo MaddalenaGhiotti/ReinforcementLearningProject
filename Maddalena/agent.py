@@ -36,16 +36,11 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         # Learned standard deviation for exploration at training time 
         self.sigma_activation = F.softplus
         init_sigma = 0.5
-        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
+        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)  #Treat sigma as a parameter to learn like the weights of the NN. A parameter to update, but independent from the state
 
 
         """
             Critic network
-        
-        # TASK 3: critic network for actor-critic algorithm
-        self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
-        self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
-        self.fc3_critic_value = torch.nn.Linear(self.hidden, 1)
         """
 
 
@@ -73,11 +68,6 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
 
         """
             Critic
-        
-        # TASK 3: forward in the critic network
-        x_critic = self.tanh(self.fc1_critic(x))
-        x_critic = self.tanh(self.fc2_critic(x_critic))
-        critic_value = self.fc3_critic_value(x_critic)
         """
         
         return normal_dist

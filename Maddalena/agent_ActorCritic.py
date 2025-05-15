@@ -131,26 +131,14 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
         
-        '''
-        OLD    
-
-        returns = discount_rewards(rewards, self.gamma)
-        returns -= returns.mean()
-        returns/= returns.std()
-
-        loss_fn =-torch.mean(action_log_probs * returns)
-        #loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
-        self.optimizer.zero_grad()
-        loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
-        self.optimizer.step()   #Compute a step of the optimization algorithm
-        '''
 
         #   - compute boostrapped discounted return estimates
         #   - compute advantage terms
 
         value_states = self.value(states)
         advantage_term = rewards+self.gamma*self.value(next_states)-value_states #Is it necessary to impose that the value at terminal state is zero?
+        advantage_term = advantage_term.detach()
+        #actor_loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
         actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
         critic_loss_fn = -torch.mean(value_states*advantage_term)
 
