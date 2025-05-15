@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-
+##############
+#######################
 def discount_rewards(r, gamma):
     """
     Computation of return G for each  time-stamp and storage in a tensor
@@ -37,7 +38,6 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         self.sigma_activation = F.softplus
         init_sigma = 0.5
         self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
-
 
         """
             Critic network
