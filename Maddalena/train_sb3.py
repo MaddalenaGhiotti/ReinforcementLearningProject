@@ -76,7 +76,7 @@ def main():
     # Evaluate (test) the policy
     eval_returns, eval_length = evaluate_policy(
         model,
-        test_env,
+        eval_env,
         n_eval_episodes=args.n_episodes,
         deterministic=True,
         return_episode_rewards=True,
