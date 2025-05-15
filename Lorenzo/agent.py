@@ -3,8 +3,6 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-##############
-#######################
 def discount_rewards(r, gamma):
     """
     Computation of return G for each  time-stamp and storage in a tensor
