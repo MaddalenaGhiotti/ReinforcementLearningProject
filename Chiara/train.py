@@ -95,7 +95,7 @@ def main(args):
 	np.save("returns.npy", np.array(mean_returns_train))
 
     
-	os.makedirs("plots", exist_ok=True) #creo cartella per i plot
+	os.makedirs("Chiara/plots", exist_ok=True) #creo cartella per i plot
 	# Plot average returns
 	plt.figure(figsize=(10,6))
 	x = np.arange(args.print_every, args.n_episodes + 1, args.print_every)
