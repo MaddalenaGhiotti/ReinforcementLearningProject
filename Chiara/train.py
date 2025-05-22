@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import time
 from env.custom_hopper import *
 from agent import Agent, Policy
+import os
 
 
 def parse_args():
@@ -93,7 +94,9 @@ def main(args):
 	torch.save(agent.policy.state_dict(), "model.mdl") #salvataggio del modello
 	np.save("returns.npy", np.array(mean_returns_train))
 
-    # Plot average returns
+    
+	os.makedirs("plots", exist_ok=True) #creo cartella per i plot
+	# Plot average returns
 	plt.figure(figsize=(10,6))
 	x = np.arange(args.print_every, args.n_episodes + 1, args.print_every)
 	plt.plot(x, mean_returns_train, marker='o', linestyle='-', label='Mean Return')
