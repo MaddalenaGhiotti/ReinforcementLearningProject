@@ -96,7 +96,7 @@ class Agent(object):
         self.done = []
 
 
-    def update_policy(self):
+    def update_policy(self, algorithm):
         #Questo metodo converte tutte le variabili memorizzate in tensori di PyTorch e le invia al dispositivo di allenamento (CPU o GPU).
         action_log_probs = torch.stack(self.action_log_probs, dim=0).to(self.train_device).squeeze(-1)
         states = torch.stack(self.states, dim=0).to(self.train_device).squeeze(-1)

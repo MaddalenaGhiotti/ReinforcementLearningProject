@@ -28,8 +28,6 @@ def parse_args():
 	parser.add_argument('--algorithm', default='reinforce', type=str, help='Algorithm to use [reinforce, actor-critic]')
 	return parser.parse_args()
 
-args = parse_args()
-
 
 def main(args):
 	# Seed setting
