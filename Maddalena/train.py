@@ -4,6 +4,8 @@
 import argparse
 import matplotlib.pyplot as plt
 from datetime import datetime
+from pathlib import Path
+import random
 
 import torch
 import gym
@@ -23,6 +25,7 @@ def parse_args():
 	parser.add_argument('--trained_model', default=None, type=str, help='Trained policy path')
 	parser.add_argument('--threshold', default=700, type=int, help='Return threshold for early model saving')
 	parser.add_argument('--baseline', default=0, type=int, help='Value of REINFORCE baseline')  ###DEFAULT: 0
+	parser.add_argument('--random_state', default=42, type=int, help='Randomness seed')
 
 	return parser.parse_args()
 
@@ -45,11 +48,23 @@ def plot_returns(numbers_array,return_array, average_array, beginning_array, poi
 
 def main():
 
+	# Seed setting
+	random.seed(args.random_state)
+	np.random.seed(args.random_state)
+	torch.manual_seed(args.random_state)
+	torch.cuda.manual_seed_all(args.random_state)
+
+	# Make directory if it does not exist
+	Path.mkdir(Path('./models'),exist_ok=True)
+	Path.mkdir(Path('./plots'),exist_ok=True)
 	#Define model name based on timestamp
 	model_name = f'Reinforce_{args.n_episodes}_b{args.baseline}_'+datetime.now().strftime('%y%m%d_%H-%M-%S')
 
+	#Make environment
 	env = gym.make('CustomHopper-source-v0')
-	# env = gym.make('CustomHopper-target-v0')
+	env_target = gym.make('CustomHopper-target-v0')
+	env.seed(args.random_state)
+	env_target.seed(args.random_state)
 
 	print('Action space:', env.action_space)
 	print('State space:', env.observation_space)
@@ -58,12 +73,14 @@ def main():
 	observation_space_dim = env.observation_space.shape[-1]
 	action_space_dim = env.action_space.shape[-1]
 
+	#Create policy
 	policy = Policy(observation_space_dim, action_space_dim)
 
 	#Start from a pre-trained policy
 	if args.trained_model:
-		policy.load_state_dict(torch.load(args.trained_model), strict=True)
+		policy.load_state_dict(torch.load('models/'+args.trained_model), strict=True)
 	
+	#Create agent
 	agent = Agent(policy, device=args.device, baseline=args.baseline)
 
 	#Initialize data structures for plot data
@@ -80,6 +97,7 @@ def main():
 		done = False
 		train_reward = 0
 		state = env.reset()  # Reset the environment and observe the initial state
+		env.set_random_parameters()
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over

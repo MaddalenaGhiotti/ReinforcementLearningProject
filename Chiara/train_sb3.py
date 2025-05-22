@@ -27,15 +27,39 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from env.custom_hopper import *  # Assicurati che il tuo custom env sia correttamente importabile
+from stable_baselines3.common.evaluation import evaluate_policy
+import argparse
 
-def main():
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n_episodes', default=10, type=int, help='Number of test episodes')   ###DEFAULT: 100000   
+    parser.add_argument('--timesteps', default=50000, type=int, help='Number of training episodes')   ###DEFAULT: 2e6  
+    parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
+    parser.add_argument('--render', default=True, action='store_true', help='Render the simulator') ###CHANGE DEFAULT TO FALSE
+    parser.add_argument('--trained_model', default=None, type=str, help='Trained model path')
+    parser.add_argument('--env_train', default='source', type=str, help='Env for training (source or target)')
+    parser.add_argument('--env_test', default='source', type=str, help='Env for test (source or target)')
+    parser.add_argument('--random_state', default=16, type=int, help='Randomness seed')
+
+    parser.add_argument('--print_every', default=5000, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
+    parser.add_argument('--plot', default=True, action='store_true', help='Plot the returns')  ###DEFAULT: False
+    parser.add_argument('--plot_every', default=75, type=int, help='Plot return every <> episodes')  ###DEFAULT: 500
+    parser.add_argument('--threshold', default=700, type=int, help='Return threshold for early model saving')
+
+    return parser.parse_args()
+
+args = parse_args()
+
+
+
+def main(args):
     # 1. Crea l'ambiente di training
     train_env = gym.make('CustomHopper-source-v0')
-    train_env = Monitor(train_env)  # utile per logging e metriche
-
+    train_env = Monitor(train_env, filename = "monitor_train.csv")  # utile per logging e metriche
+     
     # 2. Crea l'ambiente di valutazione
     eval_env = gym.make('CustomHopper-source-v0')
-    eval_env = Monitor(eval_env)
+    eval_env = Monitor(eval_env, filename = "monitor_eval.csv")
 
     # 3. Callback per valutazione periodica e salvataggio modello
     eval_callback = EvalCallback(
@@ -71,8 +95,19 @@ def main():
 
     print("Training completato. Modello salvato.")
 
+   
+    # Evaluate (test) the policy
+    eval_returns, eval_length = evaluate_policy(
+        model,
+        eval_env,
+        n_eval_episodes=args.n_episodes,
+        deterministic=True,
+        return_episode_rewards=True,
+        render=True  # True se vuoi visualizzare
+    )
+
 if __name__ == '__main__':
-    main()
+    main(args)
 
     """"Per caricare i modelli in seguito
     from stable_baselines3 import PPO

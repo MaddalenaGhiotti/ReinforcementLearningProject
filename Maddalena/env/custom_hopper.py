@@ -32,7 +32,16 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         #
         # TASK 6: implement domain randomization. Remember to sample new dynamics parameter
         #         at the start of each training episode.
-        
+                # ESEMPIO IMPLEMENTAZIONE: (da un'uniforme)
+
+        # Variazioni del ±20% attorno alle masse originali
+        variation_range = 0.2  
+        lower = (1.0 - variation_range) * self.original_masses
+        upper = (1.0 + variation_range) * self.original_masses
+
+        sampled = self.np_random.uniform(low=lower, high=upper, size=4)
+        return sampled
+
         raise NotImplementedError()
 
         return
