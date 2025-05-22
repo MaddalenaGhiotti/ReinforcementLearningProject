@@ -106,7 +106,7 @@ def main(args):
 	plt.legend()
 	plt.grid(True)
 	plt.tight_layout()
-	plt.savefig("plots/training_returns_plot.png")
+	plt.savefig("Chiara/plots/training_returns_plot.png")
 	
 
 if __name__ == '__main__':

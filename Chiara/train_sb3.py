@@ -52,7 +52,7 @@ args = parse_args()
 
 
 
-def main():
+def main(args):
     # 1. Crea l'ambiente di training
     train_env = gym.make('CustomHopper-source-v0')
     train_env = Monitor(train_env, filename = "monitor_train.csv")  # utile per logging e metriche
@@ -107,7 +107,7 @@ def main():
     )
 
 if __name__ == '__main__':
-    main()
+    main(args)
 
     """"Per caricare i modelli in seguito
     from stable_baselines3 import PPO
