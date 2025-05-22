@@ -180,7 +180,7 @@ class Agent(object):
         """ state -> action (3-d), action_log_densities """
         x = torch.from_numpy(state).float().to(self.train_device)
 
-        normal_dist = self.policy(x) #lo stato dell'ambiente viene passato alla rete neurale che con forward restituisce la distribuzione
+        normal_dist, _ = self.policy(x) #lo stato dell'ambiente viene passato alla rete neurale che con forward restituisce la distribuzione
 
         if evaluation:  # Return mean succede tipo nel test
             return normal_dist.mean, None
