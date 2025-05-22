@@ -145,7 +145,7 @@ class Agent(object):
             self.optimizer.zero_grad()
             (actor_loss + critic_loss).backward()
 
-            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
 
             self.optimizer.step()
 
