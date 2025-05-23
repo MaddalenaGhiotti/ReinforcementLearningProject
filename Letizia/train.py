@@ -24,8 +24,8 @@ def parse_args():
 
 
 def main(args):
-    env = gym.make('CustomHopper-source-v0')
-    # env = gym.make('CustomHopper-target-v0')
+    env = gym.make('CustomHopper-source-v0', train_mode=True)
+    # env = gym.make('CustomHopper-target-v0', train_mode=True)
     start_time = time.time()
 
     print('Action space:', env.action_space)

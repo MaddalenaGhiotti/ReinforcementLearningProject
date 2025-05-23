@@ -23,8 +23,8 @@ def parse_args():  # parsing vuol dire che stiamo prendendo gli argomenti da ter
 args = parse_args()
 
 def main(args):
-    env = gym.make('CustomHopper-source-v0')
-    # env = gym.make('CustomHopper-target-v0')
+    env = gym.make('CustomHopper-source-v0', train_mode=False)
+    # env = gym.make('CustomHopper-target-v0', train_mode=False)
 
     print('Action space:', env.action_space)
     print('State space:', env.observation_space)

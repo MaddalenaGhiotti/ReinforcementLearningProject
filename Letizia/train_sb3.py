@@ -14,7 +14,6 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a control policy on the Hopper environment')
     parser.add_argument('--train_env', type=str, default='CustomHopper-source-v0', help='Environment ID [source,target]')
-    parser.add_argument('--test_env', type=str, default='CustomHopper-target-v0', help='Environment ID [source,target]')
     parser.add_argument('--algo', type=str, default='PPO', choices=['PPO', 'SAC'], help='RL algorithm to use [PPO, SAC]')
     return parser.parse_args()
 
@@ -23,23 +22,22 @@ def main():
 
     args = parse_args()
     train_env = args.train_env
-    test_env = args.test_env
 
     algo = args.algo
 
     if train_env == 'source':
         # Create the source environment
-        train_env = gym.make('CustomHopper-source-v0')
+        train_env = gym.make('CustomHopper-source-v0', train_mode=True)
     elif train_env == 'target':
         # Create the target environment
-        train_env = gym.make('CustomHopper-target-v0')
+        train_env = gym.make('CustomHopper-target-v0', train_mode=True)
 
     if test_env == 'source':
         # Create the source environment
-        test_env = gym.make('CustomHopper-source-v0')   
+        test_env = gym.make('CustomHopper-source-v0', train_mode=False)   
     elif test_env == 'target':
         # Create the target environment
-        test_env = gym.make('CustomHopper-target-v0')
+        test_env = gym.make('CustomHopper-target-v0', train_mode=False)
         
 
 
@@ -78,27 +76,10 @@ def main():
     # Train the model   
     # PPO    
     model_path="ppo_hopper" if algo == 'PPO' else "sac_hopper"
-    model.learn(total_timesteps=2e5, tb_log_name=model_path)
+    model.learn(total_timesteps=int(3e5), tb_log_name=model_path)
 
     # Save the model
     model.save(model_path)
-    del model  # delete trained model to demonstrate loading
-
-    # Load the saved model
-    model = PPO.load(model_path) if algo == 'PPO' else SAC.load(model_path)
-
-    # Evaluate the policy
-    mean_reward, std_reward = evaluate_policy(
-        model,
-        test_env,
-        n_eval_episodes=50,
-        deterministic=True,
-        render=True  
-    )
-
-    print(f"Mean reward over 50 episodes: {mean_reward} ± {std_reward}")
-
-
 
 
 if __name__ == '__main__':
