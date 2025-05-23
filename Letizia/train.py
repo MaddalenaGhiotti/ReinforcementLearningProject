@@ -54,9 +54,12 @@ def main(args):
 
             agent.store_outcome(previous_state, state, action_probabilities, reward, done)
             train_reward += reward
+            if args.algorithm == 'actor-critic':
+                agent.update_policy(algorithm=args.algorithm)
 
         returns_list_train.append(train_reward)
-        agent.update_policy(algorithm=args.algorithm)
+        if args.algorithm == 'reinforce':
+            agent.update_policy(algorithm=args.algorithm)
 
         if (episode + 1) % args.print_every == 0:
             mean_return = np.mean(returns_list_train[-args.print_every:])

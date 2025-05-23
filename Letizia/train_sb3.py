@@ -32,13 +32,6 @@ def main():
         # Create the target environment
         train_env = gym.make('CustomHopper-target-v0', train_mode=True)
 
-    if test_env == 'source':
-        # Create the source environment
-        test_env = gym.make('CustomHopper-source-v0', train_mode=False)   
-    elif test_env == 'target':
-        # Create the target environment
-        test_env = gym.make('CustomHopper-target-v0', train_mode=False)
-        
 
 
     print('State space:', train_env.observation_space)  # state-space
@@ -76,7 +69,7 @@ def main():
     # Train the model   
     # PPO    
     model_path="ppo_hopper" if algo == 'PPO' else "sac_hopper"
-    model.learn(total_timesteps=int(3e5), tb_log_name=model_path)
+    model.learn(total_timesteps=int(2e6), tb_log_name=model_path)
 
     # Save the model
     model.save(model_path)
