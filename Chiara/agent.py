@@ -104,7 +104,8 @@ class Agent(object):
         rewards = torch.stack(self.rewards, dim=0).to(self.train_device).squeeze(-1)
         done = torch.Tensor(self.done).to(self.train_device)
 
-        #Una volta che i dati sono stati utilizzati per aggiornare la politica, vengono svuotati.
+        #Una volta che i dati sono stati utilizzati per aggiornare la politica, vengono svuotati per il prossimo step.
+        #a ogni ciclo si svuotano, quindi l'advantage è un numero
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
 
         #
@@ -142,14 +143,17 @@ class Agent(object):
             _, next_state_values = self.policy(next_states)
 
             # Compute targets using bootstrapped returns:
+            #G_t è lo stato attuale secondo il critic, ovvero il valore atteso della reward + il valore futuro scontato
+            # (seguendo la stessa policy), che dovrò confrontare con state_value, che è il valore attuale della rete actor, che 
+            #non tiene conto del futuro 
             # G_t = r_t + γ * V(s_{t+1}) * (1 - done)  if done ==1, no bootstrapping
             done = done.float()
-            targets = rewards + self.gamma * next_state_values * (1 - done)
+            targets = rewards + self.gamma * next_state_values * (1 - done) #oss rewards è un vettore
 
             #detach serve per dire che quella nvariabile non deve essere vista come parametro, così nel calcolo dei gradienti non di tiene in conto
             #tipo: se tu hai usato i parametri per calcolare l'advantage, torch ti calcolerebbe il gradiente anche sue quello. 
             
-            # Compute advantage: A_t = G_t - V(s_t)
+            # Compute advantage: A_t = G_t - V(s_t) allora g è un numero
             advantages = targets.detach() - state_values #potrei normalizzarlo, da vedere se serve
 
             # Actor loss (Policy Gradient): maximize advantage × log_prob
