@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-
+#Funtion to compute G
 def discount_rewards(r, gamma):
     """
     Computation of return G for each  time-stamp and storage in a tensor
@@ -19,24 +19,29 @@ def discount_rewards(r, gamma):
 
 
 class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
-    def __init__(self, state_space, action_space):
+    def __init__(self, state_space, action_space, type):
         super().__init__()
         self.state_space = state_space   #Attribute: state space
         self.action_space = action_space   #Attribute: action space
         self.hidden = 64   #Attribute: number of nodes in hidden layers
         self.tanh = torch.nn.Tanh()   #Attribute: activation function
+        self.type = type
 
-        """
-            Actor network
-        """
+        #Actor network
         self.fc1_actor = torch.nn.Linear(state_space, self.hidden)
         self.fc2_actor = torch.nn.Linear(self.hidden, self.hidden)
         self.fc3_actor_mean = torch.nn.Linear(self.hidden, action_space)
         
-        # Learned standard deviation for exploration at training time 
+        #Learned standard deviation for exploration at training time 
         self.sigma_activation = F.softplus
         init_sigma = 0.5
-        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)
+        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)  #Treat sigma as a parameter to learn like the weights of the NN. A parameter to update, but independent from the state
+
+        if type == 2:
+            #Critic network
+            self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
+            self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
+            self.fc3_critic = torch.nn.Linear(self.hidden, 1)
 
         self.init_weights()
 
@@ -49,18 +54,22 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
 
 
     def forward(self, x):
-        """
-            Actor
-        """
+        #Forward in the actor network
         x_actor = self.tanh(self.fc1_actor(x))
         x_actor = self.tanh(self.fc2_actor(x_actor))
         action_mean = self.fc3_actor_mean(x_actor)
 
         sigma = self.sigma_activation(self.sigma)
         normal_dist = Normal(action_mean, sigma)   #Normalized policy outputs (probabilities of actions)
+
+        if self.type == 2:
+            #Forward in the critic network
+            x_critic = self.tanh(self.fc1_critic(x))
+            x_critic = self.tanh(self.fc2_critic(x_critic))
+            action_value = self.fc3_critic(x_critic)
+            return normal_dist, action_value
         
         return normal_dist
-    
 
 
 class Value(torch.nn.Module):
@@ -71,14 +80,10 @@ class Value(torch.nn.Module):
         self.hidden = 64   #Attribute: number of nodes in hidden layers
         self.tanh = torch.nn.Tanh()   #Attribute: activation function
 
-        """
-            Critic network
-        """
-        # TASK 3: critic network for actor-critic algorithm
+        #Critic network
         self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
         self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
         self.fc3_critic_value = torch.nn.Linear(self.hidden, 1)
-
 
         self.init_weights()
 
@@ -91,24 +96,23 @@ class Value(torch.nn.Module):
 
 
     def forward(self, x):
-        """
-            Critic
-        """
-        # TASK 3: forward in the critic network
+        #Forward in the critic network
         x_critic = self.tanh(self.fc1_critic(x))
         x_critic = self.tanh(self.fc2_critic(x_critic))
         critic_value = self.fc3_critic_value(x_critic)
         
         return critic_value
+    
 
 
 class Agent(object):
-    def __init__(self, policy, value, device='cpu', baseline=0):
+    def __init__(self, policy, value = None, device='cpu', baseline=0, type=0):
         self.train_device = device
         self.policy = policy.to(self.train_device)
-        self.value = value.to(self.train_device)
-        self.optimizer_policy = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
-        self.optimizer_value = torch.optim.Adam(value.parameters(), lr=1e-3)   #Optimization algorithm on the value parameters
+        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
+        if type == 2:
+            self.value = value.to(self.train_device)
+            self.optimizer_value = torch.optim.Adam(value.parameters(), lr=1e-3)   #Optimization algorithm on the value parameters
 
         self.gamma = 0.99   #Discount factor
         self.states = []
@@ -131,48 +135,60 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
         
+        if type == 0:
+            returns = discount_rewards(rewards, self.gamma)
+            returns -= returns.mean()
+            returns/= returns.std()
+            # Compute loss, gradients and step the optimizer
+            loss_fn =-torch.mean(action_log_probs * returns)
+            self.optimizer.zero_grad()
+            loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
+            self.optimizer.step()   #Compute a step of the optimization algorithm
 
-        #   - compute boostrapped discounted return estimates
-        #   - compute advantage terms
+        elif type == 1:
+            value_states = self.value(states)
+            advantage_term = rewards+self.gamma*self.value(next_states)*(1-done)-value_states
+            advantage_term = advantage_term.detach()
+            actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
+            critic_loss_fn = -torch.mean(value_states*advantage_term)
+            # ACTOR: compute gradients and step the optimizer
+            self.optimizer_policy.zero_grad()
+            actor_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
+            self.optimizer_policy.step()   #Compute a step of the optimization algorithm
+            # CRITIC: compute gradients and step the optimizer
+            self.optimizer_value.zero_grad()
+            critic_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
+            torch.nn.utils.clip_grad_norm_(self.value.parameters(),1)   #Bring gradient norm to 1 if bigger
+            self.optimizer_value.step()   #Compute a step of the optimization algorithm
 
-        value_states = self.value(states)
-        advantage_term = rewards+self.gamma*self.value(next_states)*(1-done)-value_states #Is it necessary to impose that the value at terminal state is zero?
-        advantage_term = advantage_term.detach()
-        #actor_loss_fn = -(torch.from_numpy(self.gamma*np.ones((states.shape[0]))**np.arange(0,states.shape[0])).to(self.train_device)*(returns-self.baseline)*action_log_probs).sum()
-        actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
-        critic_loss_fn = -torch.mean(value_states*advantage_term)
+        elif type == 2:
+            # Compute boostrapped discounted return estimates
+            _, state_values = self.policy(states)                # V(s_t)
+            _, next_state_values = self.policy(next_states)      # V(s_{t+1})
+            done = done.float()
+            td_target = rewards + self.gamma * next_state_values.squeeze(-1) * (1 - done)  # if done=1 → no bootstrapping
+            td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
+            # Compute advantage terms
+            td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
+            td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error
+            # Compute actor loss and critic loss
+            action_log_probs = action_log_probs.squeeze(-1)
+            actor_loss = -torch.mean(action_log_probs * td_error)
+            critic_loss = F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
+            # Compute gradients and step the optimizer        
 
-        # ACTOR: compute gradients and step the optimizer
-        self.optimizer_policy.zero_grad()
-        actor_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
-        self.optimizer_policy.step()   #Compute a step of the optimization algorithm
+            self.optimizer.zero_grad()
+            (actor_loss + critic_loss).backward()
 
-        # CRITIC: compute gradients and step the optimizer
-        self.optimizer_value.zero_grad()
-        critic_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
-        torch.nn.utils.clip_grad_norm_(self.value.parameters(),1)   #Bring gradient norm to 1 if bigger
-        self.optimizer_value.step()   #Compute a step of the optimization algorithm
+            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
 
+            self.optimizer.step()
 
-        #
-        # TASK 2:
-        #   - compute discounted returns
-        #   - compute policy gradient loss function given actions and returns
-        #   - compute gradients and step the optimizer
-        #
+        return            
 
-
-        #
-        # TASK 3:
-        #   - compute boostrapped discounted return estimates
-        #   - compute advantage terms
-        #   - compute actor loss and critic loss
-        #   - compute gradients and step the optimizer
-        #
-
-        return      
-
+            
 
     def get_action(self, state, evaluation=False):
         """ 
@@ -184,18 +200,13 @@ class Agent(object):
         @return action_log_prob probability of chosen action (joint probability of the three action values)
         """
         x = torch.from_numpy(state).float().to(self.train_device)
-
         normal_dist = self.policy(x)
-
         if evaluation:  # Return mean
             return normal_dist.mean, None
-
         else:   # Sample from the distribution  (choose an action)
             action = normal_dist.sample()
-
             # Compute Log probability of the action [ log(p(a[0] AND a[1] AND a[2])) = log(p(a[0])*p(a[1])*p(a[2])) = log(p(a[0])) + log(p(a[1])) + log(p(a[2])) ]
             action_log_prob = normal_dist.log_prob(action).sum()
-
             return action, action_log_prob
 
 

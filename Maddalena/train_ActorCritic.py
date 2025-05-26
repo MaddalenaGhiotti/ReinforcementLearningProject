@@ -17,19 +17,20 @@ import gym
 
 from tqdm import tqdm
 from env.custom_hopper import *
-from agent import Agent, Policy
+from agent_ActorCritic import Agent, Policy, Value
 
 
 def parse_args():
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--n_episodes', default=50000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
-	parser.add_argument('--print_every', default=5000, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
+	parser.add_argument('--n_episodes', default=5000, type=int, help='Number of training episodes')   ###DEFAULT: 100000
+	parser.add_argument('--print_every', default=500, type=int, help='Print info every <> episodes')   ###DEFAULT: 20000
 	parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
 	parser.add_argument('--plot', default=True, action='store_true', help='Plot the returns')  ###DEFAULT: False
 	parser.add_argument('--plot_every', default=75, type=int, help='Plot return every <> episodes')  ###DEFAULT: 500
 	parser.add_argument('--trained_model', default=None, type=str, help='Trained policy path')
 	parser.add_argument('--threshold', default=700, type=int, help='Return threshold for early model saving')
 	parser.add_argument('--baseline', default=0, type=int, help='Value of REINFORCE baseline')  ###DEFAULT: 0
+	parser.add_argument('--random_state', default=42, type=int, help='Random seed')  ###DEFAULT: 0
 
 	return parser.parse_args()
 
@@ -77,15 +78,16 @@ def main():
 	observation_space_dim = env.observation_space.shape[-1]
 	action_space_dim = env.action_space.shape[-1]
 
-	#Create policy
+	#Create policy and value
 	policy = Policy(observation_space_dim, action_space_dim)
+	value = Value(observation_space_dim, action_space_dim)
 
 	#Start from a pre-trained policy
 	if args.trained_model:
 		policy.load_state_dict(torch.load(args.trained_model), strict=True)
 	
 	#Create agent
-	agent = Agent(policy, device=args.device, baseline=args.baseline)
+	agent = Agent(policy, value, device=args.device, baseline=args.baseline)
 
 	#Initialize data structures for plot data
 	numbers = []
