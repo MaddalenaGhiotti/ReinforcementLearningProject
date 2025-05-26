@@ -133,19 +133,18 @@ class Agent(object):
 
             #   - compute advantage terms
             td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
-            td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error
+            #td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error
 
             #   - compute actor loss and critic loss
             action_log_probs = action_log_probs.squeeze(-1)
             actor_loss = -torch.mean(action_log_probs * td_error)
-            critic_loss = F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
+            critic_loss = (td_error.pow(2)).mean()  # MSE loss for critic
 
             #   - compute gradients and step the optimizer        
 
             self.optimizer.zero_grad()
             (actor_loss + critic_loss).backward()
 
-            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
 
             self.optimizer.step()
 

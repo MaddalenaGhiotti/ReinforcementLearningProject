@@ -13,13 +13,13 @@ def parse_args():
     parser.add_argument('--device', default='cpu', type=str, help='network device [cpu, cuda]')
     parser.add_argument('--render', default=False, action='store_true', help='Render the simulator')
     parser.add_argument('--episodes', default=10, type=int, help='Number of test episodes')
-
+    parser.add_argument('--algorithm', default='actor-critic', type=str, help='Algorithm to use [reinforce, actor-critic]')
     return parser.parse_args()
 
 args = parse_args()
 
 
-def main():
+def main(args):
 
 	env = gym.make('CustomHopper-source-v0')
 	# env = gym.make('CustomHopper-target-v0')
@@ -36,6 +36,7 @@ def main():
 
 	agent = Agent(policy, device=args.device) #crea agente con la politica appena caricata
 
+	test_returns = []
 	for episode in range(args.episodes):
 		done = False
 		test_reward = 0
@@ -52,8 +53,20 @@ def main():
 
 			test_reward += reward
 
+		test_returns.append(test_reward)
 		print(f"Episode: {episode} | Return: {test_reward}")
 	
+    # Plot dei returns del test
+	plt.figure(figsize=(10, 6))
+	plt.plot(range(args.episodes), test_returns, marker='o', linestyle='-', color='green', label='Test Episode Return')
+	plt.xlabel('Test Episode')
+	plt.ylabel('Return')
+	plt.title(f'Test Return over Episodes ({args.algorithm})')
+	plt.legend()
+	plt.grid(True)
+	plt.tight_layout()
+	plt.savefig("Chiara/plots/test_returns_plot.png")  
+    
 
 if __name__ == '__main__':
-	main()
+	main(args)

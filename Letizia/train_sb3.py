@@ -8,10 +8,31 @@ import gym
 from env.custom_hopper import *
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.evaluation import evaluate_policy
+import argparse
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train a control policy on the Hopper environment')
+    parser.add_argument('--train_env', type=str, default='CustomHopper-source-v0', help='Environment ID [source,target]')
+    parser.add_argument('--algo', type=str, default='PPO', choices=['PPO', 'SAC'], help='RL algorithm to use [PPO, SAC]')
+    return parser.parse_args()
 
 
 def main():
-    train_env = gym.make('CustomHopper-source-v0')
+
+    args = parse_args()
+    train_env = args.train_env
+
+    algo = args.algo
+
+    if train_env == 'source':
+        # Create the source environment
+        train_env = gym.make('CustomHopper-source-v0', train_mode=True)
+    elif train_env == 'target':
+        # Create the target environment
+        train_env = gym.make('CustomHopper-target-v0', train_mode=True)
+
+
 
     print('State space:', train_env.observation_space)  # state-space
     print('Action space:', train_env.action_space)  # action-space
@@ -20,34 +41,38 @@ def main():
     #
     # TASK 4 & 5: train and test policies on the Hopper env with stable-baselines3
     #
-    model=PPO('MlpPolicy', 
-              train_env,
-              verbose=1,
-              learning_rate=1e-3,
-              n_steps=2048,
-              batch_size=64,
-              n_epochs=20,
-              tensorboard_log="./ppo_hopper_tensorboard/")
-    
-    model.learn(total_timesteps=2e5, tb_log_name="PPO_Hopper")
-    model.save("ppo_hopper")
-    del model  # delete trained model to demonstrate loading
+    if algo == 'PPO':
+        # PPO algorithm
+        model = PPO('MlpPolicy', 
+                    train_env,
+                    verbose=1,
+                    learning_rate=1e-3,
+                    n_steps=2048,
+                    batch_size=64,
+                    n_epochs=20,
+                    tensorboard_log="./ppo_hopper_tensorboard/")    
+    elif algo == 'SAC':
+        # SAC algorithm
+        model = SAC('MlpPolicy', 
+                    train_env,
+                    verbose=1,
+                    learning_rate=1e-3,
+                    buffer_size=1000000,
+                    batch_size=256,
+                    tau=0.005,
+                    gamma=0.99,
+                    train_freq=(1, 'step'),
+                    gradient_steps=1,
+                    learning_starts=1000,
+                    tensorboard_log="./sac_hopper_tensorboard/")
+        
+    # Train the model   
+    # PPO    
+    model_path="ppo_hopper" if algo == 'PPO' else "sac_hopper"
+    model.learn(total_timesteps=int(2e6), tb_log_name=model_path)
 
-    # Load the saved model
-    model = PPO.load("ppo_hopper")
-
-    # Evaluate the policy
-    mean_reward, std_reward = evaluate_policy(
-        model,
-        train_env,
-        n_eval_episodes=50,
-        deterministic=True,
-        render=True  # True se vuoi visualizzare
-    )
-
-    print(f"Mean reward over 50 episodes: {mean_reward} ± {std_reward}")
-
-
+    # Save the model
+    model.save(model_path)
 
 
 if __name__ == '__main__':
