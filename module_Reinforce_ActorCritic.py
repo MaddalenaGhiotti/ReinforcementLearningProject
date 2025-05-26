@@ -14,11 +14,11 @@ from tqdm import tqdm
 import torch
 import gym
 from env.custom_hopper import *
-from classes_Reinforce_ActorCritic import Agent, Policy, Value
+from classes import Agent, Policy, Value
 
 
 
-def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, starting_threshold=700, save_every=75, print_every=500, plot=True, random_state=42, device='cpu'):
+def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, starting_threshold=700, save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
 	"""Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE or Actor-critic algorithms"""
 	# Seed setting
@@ -31,14 +31,14 @@ def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, star
 	Path.mkdir(Path('./models'),exist_ok=True)
 	Path.mkdir(Path('./plots'),exist_ok=True)
 	#Define model name based on timestamp
-	if type==0:
+	if type_alg==0:
 		model_type='Reinforce'
-	elif type==1:
+	elif type_alg==1:
 		model_type='ActorCritic1'
-	elif type==2:
+	elif type_alg==2:
 		model_type='ActorCritic2'
 	else:
-		print('Algorithm (type) not valid!')
+		print('Algorithm (type_alg) not valid!')
 		return
 	model_name = f'{model_type}_{n_episodes}_b{baseline}_h{hopper}_rs{random_state}_'+datetime.now().strftime('%y%m%d_%H-%M-%S')
 
@@ -60,16 +60,18 @@ def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, star
 	action_space_dim = env.action_space.shape[-1]
 
 	#Create policy and value
-	policy = Policy(observation_space_dim, action_space_dim, type)
-	if type==1:
+	policy = Policy(observation_space_dim, action_space_dim, type_alg)
+	if type_alg==1:
 		value = Value(observation_space_dim, action_space_dim)
+	else:
+		value = None
 
 	#Start from a pre-trained policy
 	if trained_model:
 		policy.load_state_dict(torch.load(trained_model), strict=True)
 	
 	#Create agent
-	agent = Agent(type, policy, value, device=device, baseline=baseline)
+	agent = Agent(type_alg, policy, value, device=device, baseline=baseline)
 
 	#Initialize data structures
 	numbers = []
@@ -95,7 +97,7 @@ def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, star
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
 			#Update policy
-			if type!=0:
+			if type_alg!=0:
 				agent.update_policy()
 			train_reward += reward
 		
@@ -121,7 +123,7 @@ def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, star
 			threshold_bool = True
 
 		#Update policy
-		if type==0:
+		if type_alg==0:
 			agent.update_policy()
 
 	#Print the average of the last episodes' returns
@@ -130,15 +132,20 @@ def train(type, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, star
 	#Save final model (overwrite privious savings)
 	torch.save(agent.policy.state_dict(), "models/"+model_name+'.mdl')
 
+	#Print model name if desired
+	if print_name:
+		print()
+		print(f'MODEL NAME: {model_name}.mdl')
+
 	#Plot progress if desired
 	if plot:
 		plot_returns(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
 
-	return numbers, returns, average_returns, average_beginning
+	return numbers, returns, average_returns, average_beginning, model_name+'.mdl'
 
 ##############################################################################
 
-def test(type, model, hopper='T', n_episodes=10, render=True, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=10, render=True, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
@@ -165,11 +172,11 @@ def test(type, model, hopper='T', n_episodes=10, render=True, random_state=42, d
 	action_space_dim = env.action_space.shape[-1]
 
 	#Create and load policy
-	policy = Policy(observation_space_dim, action_space_dim, type)
-	policy.load_state_dict(torch.load(model), strict=True)
+	policy = Policy(observation_space_dim, action_space_dim, type_alg)
+	policy.load_state_dict(torch.load('models/'+model), strict=True)
 
 	#Create agent
-	agent = Agent(type, policy, device=device)  #TODO params: type, policy, value = None, device='cpu', baseline=0
+	agent = Agent(type_alg, policy, device=device)  #TODO params: type_alg, policy, value = None, device='cpu', baseline=0
 
 	returns = []
 	#Iterate over episodes

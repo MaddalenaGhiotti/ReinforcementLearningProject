@@ -19,13 +19,13 @@ def discount_rewards(r, gamma):
 
 
 class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
-    def __init__(self, state_space, action_space, type):
+    def __init__(self, state_space, action_space, type_alg):
         super().__init__()
         self.state_space = state_space   #Attribute: state space
         self.action_space = action_space   #Attribute: action space
         self.hidden = 64   #Attribute: number of nodes in hidden layers
         self.tanh = torch.nn.Tanh()   #Attribute: activation function
-        self.type = type
+        self.type_alg = type_alg
 
         #Actor network
         self.fc1_actor = torch.nn.Linear(state_space, self.hidden)
@@ -37,7 +37,7 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         init_sigma = 0.5
         self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)  #Treat sigma as a parameter to learn like the weights of the NN. A parameter to update, but independent from the state
 
-        if type == 2:
+        if type_alg == 2:
             #Critic network
             self.fc1_critic = torch.nn.Linear(state_space, self.hidden)
             self.fc2_critic = torch.nn.Linear(self.hidden, self.hidden)
@@ -62,7 +62,7 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         sigma = self.sigma_activation(self.sigma)
         normal_dist = Normal(action_mean, sigma)   #Normalized policy outputs (probabilities of actions)
 
-        if self.type == 2:
+        if self.type_alg == 2:
             #Forward in the critic network
             x_critic = self.tanh(self.fc1_critic(x))
             x_critic = self.tanh(self.fc2_critic(x_critic))
@@ -106,11 +106,11 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, type, policy, value = None, device='cpu', baseline=0):
+    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
-        if type == 2:
+        if type_alg == 1:
             self.value = value.to(self.train_device)
             self.optimizer_value = torch.optim.Adam(value.parameters(), lr=1e-3)   #Optimization algorithm on the value parameters
 
@@ -121,6 +121,7 @@ class Agent(object):
         self.rewards = []
         self.done = []
         self.baseline = baseline
+        self.type_alg=type_alg
 
 
     def update_policy(self):
@@ -135,10 +136,10 @@ class Agent(object):
 
         self.states, self.next_states, self.action_log_probs, self.rewards, self.done = [], [], [], [], []
         
-        if type == 0:
+        if self.type_alg == 0:
             returns = discount_rewards(rewards, self.gamma)
             returns -= returns.mean()
-            returns/= returns.std()
+            returns/= (returns.std()+1e-8)  #TODO Normalizzare prima o dopo aver messo la baseline?
             # Compute loss, gradients and step the optimizer
             loss_fn =-torch.mean(action_log_probs * (returns-self.baseline))
             self.optimizer.zero_grad()
@@ -146,24 +147,24 @@ class Agent(object):
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
             self.optimizer.step()   #Compute a step of the optimization algorithm
 
-        elif type == 1:
+        elif self.type_alg == 1:
             value_states = self.value(states)
             advantage_term = rewards+self.gamma*self.value(next_states)*(1-done)-value_states
             advantage_term = advantage_term.detach()
             actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
             critic_loss_fn = -torch.mean(value_states*advantage_term)
             # ACTOR: compute gradients and step the optimizer
-            self.optimizer_policy.zero_grad()
+            self.optimizer.zero_grad()
             actor_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
-            self.optimizer_policy.step()   #Compute a step of the optimization algorithm
+            self.optimizer.step()   #Compute a step of the optimization algorithm
             # CRITIC: compute gradients and step the optimizer
             self.optimizer_value.zero_grad()
             critic_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
             torch.nn.utils.clip_grad_norm_(self.value.parameters(),1)   #Bring gradient norm to 1 if bigger
             self.optimizer_value.step()   #Compute a step of the optimization algorithm
 
-        elif type == 2:
+        elif self.type_alg == 2:
             # Compute boostrapped discounted return estimates
             _, state_values = self.policy(states)                # V(s_t)
             _, next_state_values = self.policy(next_states)      # V(s_{t+1})
@@ -172,11 +173,11 @@ class Agent(object):
             td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
             # Compute advantage terms
             td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
-            td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error
+            #td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error  #TODO Understand this part
             # Compute actor loss and critic loss
             action_log_probs = action_log_probs.squeeze(-1)
             actor_loss = -torch.mean(action_log_probs * td_error)
-            critic_loss = F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
+            critic_loss = (td_error.pow(2)).mean()  #F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
             # Compute gradients and step the optimizer        
 
             self.optimizer.zero_grad()
