@@ -1,7 +1,6 @@
 """Implement:
 	- threshold che aumenta man mano automaticamete, sulla base delle performance
-	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato
-	- Aggiungere tempi
+	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
 	- Plot multiplo
 	- Domain randomization
 """
@@ -10,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 import random
 from tqdm import tqdm
+import time
 #Problem specific
 import torch
 import gym
@@ -78,14 +78,20 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	returns = []
 	average_returns = []
 	average_beginning = []
+	times = []
+	average_times = []
+	average_beg_times = []
 
 	#Initialize useful variables
 	every_return = np.zeros((save_every*2))
+	every_time = np.zeros((save_every*2))
 	avg_returns = 0
+	avg_times = 0
 	threshold_bool = False
 
 	#Iterate over episodes (print progress bar in terminal)
 	for episode in tqdm(range(n_episodes)):
+		start_time = time.time()
 		done = False
 		train_reward = 0
 		state = env.reset()  # Reset the environment and observe the initial state
@@ -100,21 +106,13 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			if type_alg!=0:
 				agent.update_policy()
 			train_reward += reward
+		traject_time = time.time()-start_time
 		
 		#Print progress and save partial model every print_every episodes
 		if (episode+1)%print_every == 0:
 			torch.save(agent.policy.state_dict(), "models/"+model_name+'.mdl')
 			print('Training episode:', episode+1)
 			print('Episode return:', train_reward)
-
-		#Save data
-		every_return[(episode+1)%(save_every*2)-1]=train_reward
-		avg_returns = avg_returns*(episode/(episode+1))+train_reward/(episode+1)
-		if plot and (episode+1)%save_every == 0:
-			numbers.append(episode+1)
-			returns.append(train_reward)
-			average_returns.append(every_return.mean())
-			average_beginning.append(avg_returns)
 
 		#Save a partial model if return over threshold
 		if not threshold_bool and every_return.mean()>starting_threshold:
@@ -123,8 +121,24 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			threshold_bool = True
 
 		#Update policy
+		start2_time = time.time()
 		if type_alg==0:
 			agent.update_policy()
+		
+		#Save data
+		episode_time = traject_time + (time.time()-start2_time)
+		every_time[(episode+1)%(save_every*2)-1]=episode_time
+		avg_times = avg_times*(episode/(episode+1))+episode_time/(episode+1)
+		every_return[(episode+1)%(save_every*2)-1]=train_reward
+		avg_returns = avg_returns*(episode/(episode+1))+train_reward/(episode+1)
+		if (episode+1)%save_every == 0:
+			numbers.append(episode+1)
+			returns.append(train_reward)
+			average_returns.append(every_return.mean())
+			average_beginning.append(avg_returns)
+			times.append(episode_time)
+			average_times.append(every_time.mean())
+			average_beg_times.append(avg_times)
 
 	#Print the average of the last episodes' returns
 	print(f'Average of the last {save_every*2} returns: {average_returns[-1]}')
@@ -139,9 +153,14 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 	#Plot progress if desired
 	if plot:
-		plot_returns(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
+		plot_returns_times(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
+		plot_returns_times(np.array(numbers),np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
 
-	return numbers, returns, average_returns, average_beginning, model_name+'.mdl'
+	#Return results
+	returns_array = np.vstack((returns,average_returns,average_beginning))
+	times_array = np.vstack((times,average_times,average_beg_times))
+	return numbers, returns_array, times_array, model_name+'.mdl'
+
 
 ##############################################################################
 
@@ -203,7 +222,7 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=True, random_state=4
 ##############################################################################
 
 
-def plot_returns(numbers_array,return_array, average_array, beginning_array, points, name):
+def plot_returns_times(numbers_array,return_array, average_array, beginning_array, points, name):
 	"""Plot progress of return over episodes"""
 	plt.figure(figsize=(12,10))
 	plt.title('RETURN')
