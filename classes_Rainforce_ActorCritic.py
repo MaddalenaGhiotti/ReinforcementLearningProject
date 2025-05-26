@@ -106,7 +106,7 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, policy, value = None, device='cpu', baseline=0, type=0):
+    def __init__(self, type, policy, value = None, device='cpu', baseline=0):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
@@ -140,7 +140,7 @@ class Agent(object):
             returns -= returns.mean()
             returns/= returns.std()
             # Compute loss, gradients and step the optimizer
-            loss_fn =-torch.mean(action_log_probs * returns)
+            loss_fn =-torch.mean(action_log_probs * (returns-self.baseline))
             self.optimizer.zero_grad()
             loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger
