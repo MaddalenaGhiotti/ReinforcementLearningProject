@@ -1,7 +1,6 @@
 """Implement:
 	- threshold che aumenta man mano automaticamete, sulla base delle performance
 	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
-	- Aggiustare grafico tempi
 	- Plot multiplo
 	- Domain randomization
 """
@@ -85,7 +84,6 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, optim_lr=optim_lr)
 
 	#Initialize data structures
-	numbers = []
 	returns = []
 	average_returns = []
 	average_beginning = []
@@ -144,7 +142,6 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		every_return[(episode+1)%(save_every*2)-1]=train_reward
 		avg_returns = avg_returns*(episode/(episode+1))+train_reward/(episode+1)
 		if (episode+1)%save_every == 0:
-			numbers.append(episode+1)
 			returns.append(train_reward)
 			average_returns.append(every_return.mean())
 			average_beginning.append(avg_returns)
@@ -170,15 +167,13 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 	#Plot progress if desired
 	if plot:
-		#plot_returns_times(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
-		#plot_returns_times(np.array(numbers),np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
-		plot_returns_times(n_episodes,save_every,np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
-		plot_returns_times(n_episodes,save_every,np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
+		plot_returns_times(n_episodes,save_every,np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name, 'return')
+		plot_returns_times(n_episodes,save_every,np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name, 'time')
 
 	#Return results
 	returns_array = np.vstack((returns,average_returns,average_beginning))
 	times_array = np.vstack((times,average_times,average_beg_times))
-	return numbers, returns_array, times_array, tot_time, model_name+'.mdl'
+	return returns_array, times_array, tot_time, model_name+'.mdl'
 
 
 ##############################################################################
@@ -240,31 +235,16 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=True, gamma=0.99, op
 
 ##############################################################################
 
-'''
-def plot_returns_times(numbers_array,return_array, average_array, beginning_array, points, name):
-	"""Plot progress of return over episodes"""
-	plt.figure(figsize=(12,10))
-	plt.title('RETURN')
-	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode return (every {points})')
-	plt.plot(numbers_array[1:], average_array[1:], c='red', linestyle='--', label=f'Average over last {points*2} episodes')
-	plt.plot(numbers_array, beginning_array, c='lime', linestyle='--', label='Average over episodes from beginning')
-	plt.xlabel('Episode')
-	plt.ylabel('Return')
-	plt.grid()
-	plt.legend()
-	plt.savefig("./plots/"+name+'_Return',dpi=300)
-'''
-
-def plot_returns_times(n_episodes,save_every,return_array, average_array, beginning_array, points, name):
+def plot_returns_times(n_episodes,save_every,return_array, average_array, beginning_array, points, name, metric):
 	"""Plot progress of return over episodes"""
 	numbers_array=np.arange(save_every,n_episodes+save_every,save_every)
 	plt.figure(figsize=(12,10))
-	plt.title('RETURN')
-	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode return (every {points})')
+	plt.title(metric.upper())
+	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode {metric} (every {points})')
 	plt.plot(numbers_array[1:], average_array[1:], c='red', linestyle='--', label=f'Average over last {points*2} episodes')
 	plt.plot(numbers_array, beginning_array, c='lime', linestyle='--', label='Average over episodes from beginning')
 	plt.xlabel('Episode')
-	plt.ylabel('Return')
+	plt.ylabel(metric.capitalize())
 	plt.grid()
 	plt.legend()
 	plt.savefig("./plots/"+name+'_Return',dpi=300)
