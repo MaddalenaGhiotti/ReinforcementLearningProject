@@ -19,11 +19,11 @@ def discount_rewards(r, gamma):
 
 
 class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
-    def __init__(self, state_space, action_space, type_alg):
+    def __init__(self, state_space, action_space, type_alg, layer_size=64):
         super().__init__()
         self.state_space = state_space   #Attribute: state space
         self.action_space = action_space   #Attribute: action space
-        self.hidden = 64   #Attribute: number of nodes in hidden layers
+        self.hidden = layer_size   #Attribute: number of nodes in hidden layers
         self.tanh = torch.nn.Tanh()   #Attribute: activation function
         self.type_alg = type_alg
 
@@ -73,11 +73,11 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
 
 
 class Value(torch.nn.Module):
-    def __init__(self, state_space, action_space):
+    def __init__(self, state_space, action_space, layer_size=64):
         super().__init__()
         self.state_space = state_space   #Attribute: state space
         self.action_space = action_space   #Attribute: action space
-        self.hidden = 64   #Attribute: number of nodes in hidden layers
+        self.hidden = layer_size   #Attribute: number of nodes in hidden layers
         self.tanh = torch.nn.Tanh()   #Attribute: activation function
 
         #Critic network
@@ -106,15 +106,15 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0):
+    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, optim_lr=1e-3):
         self.train_device = device
         self.policy = policy.to(self.train_device)
-        self.optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)   #Optimization algorithm on the policy parameters
+        self.optimizer = torch.optim.Adam(policy.parameters(), lr=optim_lr)   #Optimization algorithm on the policy parameters
         if type_alg == 1:
             self.value = value.to(self.train_device)
-            self.optimizer_value = torch.optim.Adam(value.parameters(), lr=1e-3)   #Optimization algorithm on the value parameters
+            self.optimizer_value = torch.optim.Adam(value.parameters(), lr=optim_lr)   #Optimization algorithm on the value parameters
 
-        self.gamma = 0.99   #Discount factor
+        self.gamma = gamma   #Discount factor
         self.states = []
         self.next_states = []
         self.action_log_probs = []

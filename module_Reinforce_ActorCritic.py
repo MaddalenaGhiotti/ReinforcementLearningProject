@@ -1,17 +1,18 @@
 """Implement:
 	- threshold che aumenta man mano automaticamete, sulla base delle performance
 	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
-	- Tempo totale
-	- Salvataggio variabili
+	- Aggiustare grafico tempi
 	- Plot multiplo
 	- Domain randomization
 """
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
+import os
 import random
 from tqdm import tqdm
 import time
+import csv
 #Problem specific
 import torch
 import gym
@@ -20,7 +21,7 @@ from classes import Agent, Policy, Value
 
 
 
-def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, starting_threshold=700, save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
+def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
 	"""Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE or Actor-critic algorithms"""
 	# Seed setting
@@ -32,6 +33,14 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	# Make directory if it does not exist
 	Path.mkdir(Path('./models'),exist_ok=True)
 	Path.mkdir(Path('./plots'),exist_ok=True)
+	csv_path = os.path.join(os.getcwd(), csv_name)
+	if not os.path.exists(csv_path):
+		print(f"Creation of new CSV file {csv_name}.")
+		fields = ['model_name','type_alg','hopper','n_episodes','trained_model','baseline','gamma','optim_lr','layer_size','save_every','random_state','returns','returns_AvgLast','returns_AvgBeginning','times','times_AvgLast','times_AvgBeginning', 'tot_time']
+		with open(csv_name, 'a') as f:
+			writer = csv.writer(f)
+			writer.writerow(fields)
+		
 	#Define model name based on timestamp
 	if type_alg==0:
 		model_type='Reinforce'
@@ -62,9 +71,9 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	action_space_dim = env.action_space.shape[-1]
 
 	#Create policy and value
-	policy = Policy(observation_space_dim, action_space_dim, type_alg)
+	policy = Policy(observation_space_dim, action_space_dim, type_alg, layer_size=layer_size)
 	if type_alg==1:
-		value = Value(observation_space_dim, action_space_dim)
+		value = Value(observation_space_dim, action_space_dim, layer_size=layer_size)
 	else:
 		value = None
 
@@ -73,7 +82,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		policy.load_state_dict(torch.load(trained_model), strict=True)
 	
 	#Create agent
-	agent = Agent(type_alg, policy, value, device=device, baseline=baseline)
+	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, optim_lr=optim_lr)
 
 	#Initialize data structures
 	numbers = []
@@ -147,8 +156,12 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	#Print the average of the last episodes' returns
 	print(f'Average of the last {save_every*2} returns: {average_returns[-1]}')
 
-	#Save final model (overwrite privious savings)
+	#Save final model (overwrite privious savings) and data
 	torch.save(agent.policy.state_dict(), "models/"+model_name+'.mdl')
+	fields=[model_name,type_alg,hopper,n_episodes, trained_model, baseline, gamma, optim_lr, layer_size, save_every, random_state, returns, average_returns, average_beginning, times, average_times, average_beg_times, tot_time]
+	with open(csv_name, 'a') as f:
+		writer = csv.writer(f)
+		writer.writerow(fields)
 
 	#Print model name if desired
 	if print_name:
@@ -157,18 +170,20 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 	#Plot progress if desired
 	if plot:
-		plot_returns_times(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
-		plot_returns_times(np.array(numbers),np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
+		#plot_returns_times(np.array(numbers),np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
+		#plot_returns_times(np.array(numbers),np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
+		plot_returns_times(n_episodes,save_every,np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name)
+		plot_returns_times(n_episodes,save_every,np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name)
 
 	#Return results
 	returns_array = np.vstack((returns,average_returns,average_beginning))
 	times_array = np.vstack((times,average_times,average_beg_times))
-	return numbers, returns_array, times_array, model_name+'.mdl'
+	return numbers, returns_array, times_array, tot_time, model_name+'.mdl'
 
 
 ##############################################################################
 
-def test(type_alg, model, hopper='T', n_episodes=10, render=True, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=10, render=True, gamma=0.99, optim_lr=1e-3, layer_size=64, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
@@ -195,11 +210,11 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=True, random_state=4
 	action_space_dim = env.action_space.shape[-1]
 
 	#Create and load policy
-	policy = Policy(observation_space_dim, action_space_dim, type_alg)
+	policy = Policy(observation_space_dim, action_space_dim, type_alg, layer_size=layer_size)
 	policy.load_state_dict(torch.load('models/'+model), strict=True)
 
 	#Create agent
-	agent = Agent(type_alg, policy, device=device)  #TODO params: type_alg, policy, value = None, device='cpu', baseline=0
+	agent = Agent(type_alg, policy, device=device, gamma=gamma, optim_lr=optim_lr)  #TODO params: type_alg, policy, value = None, device='cpu', baseline=0
 
 	returns = []
 	#Iterate over episodes
@@ -225,9 +240,24 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=True, random_state=4
 
 ##############################################################################
 
-
+'''
 def plot_returns_times(numbers_array,return_array, average_array, beginning_array, points, name):
 	"""Plot progress of return over episodes"""
+	plt.figure(figsize=(12,10))
+	plt.title('RETURN')
+	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode return (every {points})')
+	plt.plot(numbers_array[1:], average_array[1:], c='red', linestyle='--', label=f'Average over last {points*2} episodes')
+	plt.plot(numbers_array, beginning_array, c='lime', linestyle='--', label='Average over episodes from beginning')
+	plt.xlabel('Episode')
+	plt.ylabel('Return')
+	plt.grid()
+	plt.legend()
+	plt.savefig("./plots/"+name+'_Return',dpi=300)
+'''
+
+def plot_returns_times(n_episodes,save_every,return_array, average_array, beginning_array, points, name):
+	"""Plot progress of return over episodes"""
+	numbers_array=np.arange(save_every,n_episodes+save_every,save_every)
 	plt.figure(figsize=(12,10))
 	plt.title('RETURN')
 	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode return (every {points})')
