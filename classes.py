@@ -201,7 +201,13 @@ class Agent(object):
         @return action_log_prob probability of chosen action (joint probability of the three action values)
         """
         x = torch.from_numpy(state).float().to(self.train_device)
-        normal_dist = self.policy(x)
+        out = self.policy(x)
+
+        if isinstance(out, tuple):
+            normal_dist = out[0]  # ignore Critic if present (type_alg == 2)
+        else:
+            normal_dist = out
+           
         if evaluation:  # Return mean
             return normal_dist.mean, None
         else:   # Sample from the distribution  (choose an action)
