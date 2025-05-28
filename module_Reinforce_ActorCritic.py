@@ -1,6 +1,8 @@
 """Implement:
 	- threshold che aumenta man mano automaticamete, sulla base delle performance
 	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
+	- Tempo totale
+	- Salvataggio variabili
 	- Plot multiplo
 	- Domain randomization
 """
@@ -90,6 +92,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	threshold_bool = False
 
 	#Iterate over episodes (print progress bar in terminal)
+	start_tot_time = time.time()
 	for episode in tqdm(range(n_episodes)):
 		start_time = time.time()
 		done = False
@@ -139,7 +142,8 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			times.append(episode_time)
 			average_times.append(every_time.mean())
 			average_beg_times.append(avg_times)
-
+	tot_time = time.time()-start_tot_time
+	
 	#Print the average of the last episodes' returns
 	print(f'Average of the last {save_every*2} returns: {average_returns[-1]}')
 
