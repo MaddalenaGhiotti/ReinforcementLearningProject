@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
 import random
+import os 
 from tqdm import tqdm
 import time
+import csv
 #Problem specific
 import torch
 import gym
@@ -20,7 +22,7 @@ from classes import Agent, Policy, Value
 
 
 
-def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, starting_threshold=700, save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cuda'):
+def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cuda'):
 	"""Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE or Actor-critic algorithms"""
 	# Seed setting
@@ -32,6 +34,15 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	# Make directory if it does not exist
 	Path.mkdir(Path('./models'),exist_ok=True)
 	Path.mkdir(Path('./plots'),exist_ok=True)
+
+	csv_path = os.path.join(os.getcwd(), csv_name)
+	if not os.path.exists(csv_path):
+		print(f"Creation of new CSV file {csv_name}.")
+		fields = ['model_name','type_alg','hopper','n_episodes','trained_model','baseline','gamma','optim_lr','layer_size','save_every','random_state','returns','returns_AvgLast','returns_AvgBeginning','times','times_AvgLast','times_AvgBeginning', 'tot_time']
+		with open(csv_name, 'a') as f:
+			writer = csv.writer(f)
+			writer.writerow(fields)
+	
 	#Define model name based on timestamp
 	if type_alg==0:
 		model_type='Reinforce'
