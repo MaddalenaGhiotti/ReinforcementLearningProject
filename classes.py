@@ -169,21 +169,21 @@ class Agent(object):
             _, state_values = self.policy(states)                # V(s_t)
             _, next_state_values = self.policy(next_states)      # V(s_{t+1})
             done = done.float()
-            td_target = rewards + self.gamma * next_state_values.squeeze(-1) * (1 - done)  # if done=1 → no bootstrapping
+            td_target = rewards + self.gamma * next_state_values * (1 - done)  # if done=1 → no bootstrapping
             td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
             # Compute advantage terms
-            td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
+            td_error = td_target - state_values  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
             #td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error  #TODO Understand this part
             # Compute actor loss and critic loss
-            action_log_probs = action_log_probs.squeeze(-1)
+            action_log_probs = action_log_probs
             actor_loss = -torch.mean(action_log_probs * td_error)
-            critic_loss = (td_error.pow(2)).mean()  #F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
+            critic_loss = (td_error.pow(2))   # MSE loss for critic
             # Compute gradients and step the optimizer        
 
             self.optimizer.zero_grad()
             (actor_loss + critic_loss).backward()
 
-            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
 
             self.optimizer.step()
 
