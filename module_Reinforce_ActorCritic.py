@@ -164,6 +164,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 	if print_name:
 		print()
 		print(f'MODEL NAME: {model_name}.mdl')
+		print()
 
 	#Plot progress if desired
 	if plot:
@@ -178,7 +179,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 ##############################################################################
 
-def test(type_alg, model, hopper='T', n_episodes=10, render=True, gamma=0.99, optim_lr=1e-3, layer_size=64, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
