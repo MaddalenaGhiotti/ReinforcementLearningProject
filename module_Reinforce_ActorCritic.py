@@ -105,6 +105,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		done = False
 		train_reward = 0
 		state = env.reset()  # Reset the environment and observe the initial state
+		agent.reset_I()  # Reset I for type_alg=2 
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
