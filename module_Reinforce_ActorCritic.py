@@ -20,7 +20,7 @@ from classes import Agent, Policy, Value
 
 
 
-def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
+def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
 	"""Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE or Actor-critic algorithms"""
 	# Seed setting
@@ -81,7 +81,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		policy.load_state_dict(torch.load(trained_model), strict=True)
 	
 	#Create agent
-	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, optim_lr=optim_lr)
+	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, alpha=alpha, optim_lr=optim_lr)
 
 	#Initialize data structures
 	returns = []

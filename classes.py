@@ -106,7 +106,7 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, optim_lr=1e-3):
+    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=optim_lr)   #Optimization algorithm on the policy parameters
@@ -120,6 +120,7 @@ class Agent(object):
         self.action_log_probs = []
         self.rewards = []
         self.done = []
+        self.alpha = alpha #Weight for the actor loss in type_alg == 2, used to balance actor and critic losses
         self.baseline = baseline
         self.type_alg=type_alg
         self.I = 1 # gamma^t, used in type_alg == 2 
@@ -178,12 +179,11 @@ class Agent(object):
             td_error = td_target - state_values  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
 
             action_log_probs = action_log_probs
-            actor_loss = -self.I*action_log_probs * td_error
+            actor_loss = -self.I * action_log_probs * td_error
             critic_loss = 1/2*(td_error.pow(2))   
-            # Compute gradients and step the optimizer        
-
+                 
             self.optimizer.zero_grad()
-            (actor_loss + critic_loss).backward()
+            (self.alpha*actor_loss + (1-self.alpha)*critic_loss).backward()
 
             self.optimizer.step()
 
