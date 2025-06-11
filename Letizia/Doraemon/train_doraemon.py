@@ -1,3 +1,8 @@
+import sys, os
+# aggiungi la cartella due livelli sopra (il project root) nel path
+sys.path.insert(0, os.path.abspath(os.path.join(__file__, '..', '..')))
+
+
 import numpy as np
 from agent import Policy
 from custom_hopper_doraemon import make_hopper_with_params
