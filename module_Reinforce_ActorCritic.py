@@ -20,7 +20,7 @@ from classes import Agent, Policy, Value
 
 
 
-def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
+def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
 	"""Train an RL agent on the OpenAI Gym Hopper environment using
     REINFORCE or Actor-critic algorithms"""
 	# Seed setting
@@ -81,7 +81,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		policy.load_state_dict(torch.load(trained_model), strict=True)
 	
 	#Create agent
-	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, optim_lr=optim_lr)
+	agent = Agent(type_alg, policy, value, device=device, baseline=baseline, gamma=gamma, alpha=alpha, optim_lr=optim_lr)
 
 	#Initialize data structures
 	returns = []
@@ -105,6 +105,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		done = False
 		train_reward = 0
 		state = env.reset()  # Reset the environment and observe the initial state
+		agent.reset_I()  # Reset I for type_alg=2 
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
@@ -168,8 +169,8 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 	#Plot progress if desired
 	if plot:
-		plot_returns_times(n_episodes,save_every,np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name, 'return')
-		plot_returns_times(n_episodes,save_every,np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name, 'time')
+		plot_returns_times(save_every,np.array(returns),np.array(average_returns),np.array(average_beginning), save_every, model_name, 'return')
+		plot_returns_times(save_every,np.array(times),np.array(average_times),np.array(average_beg_times), save_every, 'time_'+model_name, 'time')
 
 	#Return results
 	returns_array = np.vstack((returns,average_returns,average_beginning))
@@ -236,9 +237,10 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 
 ##############################################################################
 
-def plot_returns_times(n_episodes,save_every,return_array, average_array, beginning_array, points, name, metric):
+def plot_returns_times(save_every,return_array, average_array, beginning_array, points, name, metric):
 	"""Plot progress of return over episodes"""
-	numbers_array=np.arange(save_every,n_episodes+save_every,save_every)
+	num_returns = len(return_array)
+	numbers_array = np.arange(save_every, save_every * (num_returns + 1), save_every)
 	plt.figure(figsize=(12,10))
 	plt.title(metric.upper())
 	plt.plot(numbers_array, return_array, c='lightsteelblue', label=f'Episode {metric} (every {points})')
@@ -248,5 +250,5 @@ def plot_returns_times(n_episodes,save_every,return_array, average_array, beginn
 	plt.ylabel(metric.capitalize())
 	plt.grid()
 	plt.legend()
-	plt.savefig("./plots/"+name+'_Return',dpi=300)
+	plt.savefig("./plots/"+name+'_Return.png',dpi=300)
 

@@ -106,7 +106,7 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, optim_lr=1e-3):
+    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=optim_lr)   #Optimization algorithm on the policy parameters
@@ -120,8 +120,10 @@ class Agent(object):
         self.action_log_probs = []
         self.rewards = []
         self.done = []
+        self.alpha = alpha #Weight for the actor loss in type_alg == 2, used to balance actor and critic losses
         self.baseline = baseline
         self.type_alg=type_alg
+        self.I = 1 # gamma^t, used in type_alg == 2 
 
 
     def update_policy(self):
@@ -165,29 +167,38 @@ class Agent(object):
             self.optimizer_value.step()   #Compute a step of the optimization algorithm
 
         elif self.type_alg == 2:
+
             # Compute boostrapped discounted return estimates
             _, state_values = self.policy(states)                # V(s_t)
             _, next_state_values = self.policy(next_states)      # V(s_{t+1})
             done = done.float()
-            td_target = rewards + self.gamma * next_state_values.squeeze(-1) * (1 - done)  # if done=1 → no bootstrapping
+
+            td_target = rewards + self.gamma * next_state_values * (1 - done)  # if done=1 → no bootstrapping
             td_target = td_target.detach()  # Detach from the graph to avoid backpropagation through the next state value
-            # Compute advantage terms
-            td_error = td_target - state_values.squeeze(-1)  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
-            #td_error = (td_error - td_error.mean()) / (td_error.std() + 1e-8) # Normalize the TD error  #TODO Understand this part
-            # Compute actor loss and critic loss
-            action_log_probs = action_log_probs.squeeze(-1)
-            actor_loss = -torch.mean(action_log_probs * td_error)
-            critic_loss = (td_error.pow(2)).mean()  #F.mse_loss(state_values.squeeze(-1), td_target)  # MSE loss for critic
-            # Compute gradients and step the optimizer        
+            
+            td_error = td_target - state_values  # delta = R_t + gamma*V(s_{t+1}) - V(s_t)
 
+            action_log_probs = action_log_probs
+            actor_loss = -self.I * action_log_probs * td_error
+            critic_loss = 1/2*(td_error.pow(2))   
+                 
             self.optimizer.zero_grad()
-            (actor_loss + critic_loss).backward()
-
-            #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1) # Gradient clipping
+            (self.alpha*actor_loss + (1-self.alpha)*critic_loss).backward()
 
             self.optimizer.step()
 
-        return            
+            self.I = self.I * self.gamma  # Update the I for the next step
+
+        return 
+
+    def reset_I(self):
+        """
+        Reset the I value to 1 for the next episode (type_alg == 2)
+        """
+        self.I = 1           
+        
+        return 
+    
 
             
 

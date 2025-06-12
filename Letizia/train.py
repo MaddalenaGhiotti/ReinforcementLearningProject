@@ -45,6 +45,10 @@ def main(args):
         done = False
         train_reward = 0
         state = env.reset()
+        
+        if args.algorithm == 'actor-critic':
+            agent.reset_I()
+        
 
         while not done:
             action, action_probabilities = agent.get_action(state)
@@ -53,9 +57,9 @@ def main(args):
             state, reward, done, info = env.step(action.detach().cpu().numpy())
 
             agent.store_outcome(previous_state, state, action_probabilities, reward, done)
-            train_reward += reward
             if args.algorithm == 'actor-critic':
                 agent.update_policy(algorithm=args.algorithm)
+            train_reward += reward
 
         returns_list_train.append(train_reward)
         if args.algorithm == 'reinforce':
