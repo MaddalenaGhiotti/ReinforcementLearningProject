@@ -1,101 +1,137 @@
 import numpy as np
 import gym
 from gym import utils
-from .mujoco_env import MujocoEnv
+from env.mujoco_env import MujocoEnv
 
-def make_hopper_with_params(xi: np.ndarray):
-    """Factory function: creates a CustomHopper environment with masses set by xi."""
-    env = CustomHopper(train_mode=True)
-    env.set_parameters(xi)
-    return env
+class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
+    """Hopper environment tailored for the DORAEMON loop.
 
-class CustomHopper(MujocoEnv, utils.EzPickle):
+    Features
+    --------
+    * **Domain Randomization** – If an external `dr_distribution` (multivariate Beta) is provided,
+      every episode samples a new vector of scaling factors for the 4 body masses and applies it.
+    * **Episode Buffer** – Stores, at the end of each episode, a dictionary with the sampled
+      dynamics parameters and the cumulative return so that DORAEMON can perform importance
+      sampling. Retrieve it with `get_buffer()` and clear it with `reset_buffer()`.
+    * **Train / Eval switch** – When `train_mode=False` the dynamics are kept fixed (useful for
+      evaluation runs).
     """
-    Hopper environment with support for controlled domain randomization.
-    Parameter sampling is handled externally by DoraemonTrainer via set_parameters.
-    """
-    def __init__(self, train_mode=True):
-        # Initialize the MuJoCo environment (4-frame skip)
-        MujocoEnv.__init__(self, 4)
+
+    def __init__(self,
+                 dr_distribution=None,
+                 domain=None,
+                 train_mode=True,
+                 frame_skip: int = 4,
+                 return_threshold: float = 500.0):
+        
+        # episode logging 
+        self._episode_return = 0.0
+        self._global_buffer = []     # list[dict]: {'dynamics': np.ndarray, 'return': float, 'success': float}
+
+        self._current_scale = np.ones(4)  # current scaling factors for the 4 link masses
+        self.return_threshold = return_threshold
+
+        MujocoEnv.__init__(self, frame_skip)
         utils.EzPickle.__init__(self)
 
-        # Store the original masses of all body links (excluding the base)
-        self.original_masses = np.copy(self.sim.model.body_mass[1:])
+        # domain randomisation
+        self.original_masses = np.copy(self.sim.model.body_mass[1:])  # 4 link masses
+        self.dr_distribution = dr_distribution
         self.train_mode = train_mode
 
-    def set_parameters(self, xi: np.ndarray):
-        """
-        Set the body link masses according to the provided xi vector.
+        # optional domain presets 
+        if domain == 'source':       # lighter torso
+            self.sim.model.body_mass[1] *= 0.7
+        elif domain == 'target':     # heavier torso
+            self.sim.model.body_mass[1] *= 1.3
 
-        Args:
-            xi (np.ndarray): Array of masses matching original_masses shape.
-        """
-        assert xi.shape == self.original_masses.shape, \
-            f"Shape of xi {xi.shape} is not compatible with original masses {self.original_masses.shape}."
-        # Assign new masses and update the simulation model
-        self.sim.model.body_mass[1:] = xi
-        self.sim.forward()
+
+
+    # Public helpers for DORAEMON
+
+    def get_buffer(self):
+        """Return the list of logged episodes collected so far."""
+        buf = self._global_buffer.copy()  # return a copy to avoid external modifications
+        self._global_buffer.clear()        # clear the global buffer after reading
+        return buf
+
+    def reset_buffer(self):
+        """Erase the stored episode information (call after reading)."""
+        self._global_buffer.clear() 
+
+ 
+    # Domain-randomisation utilities
+
+    def sample_parameters(self):
+        """Sample a new set of masses (shape: 4,) according to the DR distribution."""
+        scale_factors = (self.dr_distribution.sample(1)[0]           # (4,) valori in [0.5,1.5]
+                        if self.dr_distribution is not None
+                        else np.random.uniform(0.5, 1.5, size=self.original_masses.shape))  # uniform in [0.5, 1.5] if no distribution is provided       
+        masses = self.original_masses * scale_factors   
+        self._current_scale = scale_factors             # meomrize the current scaling factors
+        return masses
+
+    def set_parameters(self, masses: np.ndarray):
+        """Apply the given masses to the MuJoCo model."""
+        self.sim.model.body_mass[1:] = masses
+
+
+    # MuJoCoEnv API overrides
 
     def reset_model(self):
-        """
-        Reset the simulation state without altering the masses.
-        Mass values must be set via set_parameters before calling reset.
-        """
-        # Randomize initial position and velocity slightly
-        qpos = self.init_qpos + self.np_random.uniform(
-            low=-.005, high=.005, size=self.model.nq
-        )
-        qvel = self.init_qvel + self.np_random.uniform(
-            low=-.005, high=.005, size=self.model.nv
-        )
+        """Called at every environment reset."""
+        if self.train_mode:                          # sample new dynamics only in train mode
+            self.set_parameters(self.sample_parameters())
+        self._episode_return = 0.0                   # reset return tracker     
+
+        # randomise initial state slightly
+        qpos = self.init_qpos + self.np_random.uniform(low=-.005, high=.005, size=self.model.nq)
+        qvel = self.init_qvel + self.np_random.uniform(low=-.005, high=.005, size=self.model.nv)
         self.set_state(qpos, qvel)
         return self._get_obs()
 
-    def step(self, action):
-        """
-        Perform one simulation step with the given action.
-
-        Returns:
-            ob (np.ndarray): Observation after the step.
-            reward (float): Computed reward for this transition.
-            done (bool): Whether the episode has terminated.
-            info (dict): Additional information including 'success' flag.
-        """
-        # Measure forward progress
-        pos_before = self.sim.data.qpos[0]
-        self.do_simulation(action, self.frame_skip)
-        pos_after, height, angle = self.sim.data.qpos[0:3]
-
-        # Compute reward: forward progress + alive bonus - control cost
-        alive_bonus = 1.0
-        reward = (pos_after - pos_before) / self.dt + alive_bonus
-        reward -= 1e-3 * np.square(action).sum()
-
-        # Check termination conditions
-        state_vec = self.state_vector()
-        done = not (
-            np.isfinite(state_vec).all()
-            and (np.abs(state_vec[2:]) < 100).all()
-            and (height > 0.7)
-            and (abs(angle) < 0.2)
-        )
-
-        ob = self._get_obs()
-        # Indicate success if the episode did not terminate prematurely
-        return ob, reward, done, {"success": not done}
-
     def _get_obs(self):
-        """
-        Return the current observation consisting of positions (excluding root) and velocities.
-        """
+        """Return current observation vector (pos[1:], vel)."""
         return np.concatenate([
             self.sim.data.qpos.flat[1:],
             self.sim.data.qvel.flat
         ])
 
-# Register the environment with Gym
+    def step(self, action: np.ndarray):
+        """Standard MuJoCo step with simple reward and termination criteria."""
+        pos_before = self.sim.data.qpos[0]
+        self.do_simulation(action, self.frame_skip)
+        pos_after, height, ang = self.sim.data.qpos[:3]
+
+        #  reward 
+        alive_bonus = 1.0
+        reward = (pos_after - pos_before) / self.dt + alive_bonus    # forward progress + alive
+        reward -= 1e-3 * np.square(action).sum()                     # control cost
+        self._episode_return += reward
+
+        #  termination
+        done = not (np.isfinite(self.state_vector()).all() and height > 0.7 and abs(ang) < 0.2)
+
+        # buffer logging
+        if done: 
+            ep_rec = {
+                "dynamics": np.copy(self._current_scale),
+                "return":   self._episode_return,
+            }
+            is_success = float(self._episode_return >= self.return_threshold)
+            ep_rec["success"] = is_success
+
+        
+            self._global_buffer.append(ep_rec)
+
+            self._episode_return = 0.0
+        
+        return self._get_obs(), reward, done, {}
+
+# Gym registration
+
 gym.envs.register(
-    id="CustomHopper-DORAEMON-v0",
-    entry_point="%s:CustomHopper" % __name__,
-    max_episode_steps=500,
-)
+    id="CustomHopperDoraemon-v0",
+    entry_point=f"{__name__}:CustomHopperDoraemon",
+    max_episode_steps=500
+) 

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 
 from env.custom_hopper import *
-from agent import Agent, Policy
+from Letizia.agent import Agent, Policy
 
 
 def parse_args():
