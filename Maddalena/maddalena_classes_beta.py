@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
+from torch.distributions import Beta
 
 #Funtion to compute G
 def discount_rewards(r, gamma):
@@ -30,12 +31,14 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         #Actor network
         self.fc1_actor = torch.nn.Linear(state_space, self.hidden)
         self.fc2_actor = torch.nn.Linear(self.hidden, self.hidden)
-        self.fc3_actor_mean = torch.nn.Linear(self.hidden, action_space)
-        
+        self.fc3_actor = torch.nn.Linear(self.hidden, action_space*2)
+
+        self.actor_alpha_beta = torch.nn.Softplus()
+
         #Learned standard deviation for exploration at training time 
-        self.sigma_activation = F.softplus
-        init_sigma = 0.5
-        self.sigma = torch.nn.Parameter(torch.zeros(self.action_space)+init_sigma)  #Treat sigma as a parameter to learn like the weights of the NN. A parameter to update, but independent from the state
+        #self.beta_activation = F.softplus
+        #init_beta = 0.5
+        #self.beta = torch.nn.Parameter(torch.zeros(self.action_space)+init_beta)  #Treat beta as a parameter to learn like the weights of the NN. A parameter to update, but independent from the state
 
         if type_alg == 2:
             #Critic network
@@ -57,19 +60,20 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         #Forward in the actor network
         x_actor = self.tanh(self.fc1_actor(x))
         x_actor = self.tanh(self.fc2_actor(x_actor))
-        action_mean = self.fc3_actor_mean(x_actor)
+        x_actor = self.tanh(self.fc3_actor(x_actor))
+        action_alpha_beta = self.actor_alpha_beta(x_actor)
 
-        sigma = self.sigma_activation(self.sigma)
-        normal_dist = Normal(action_mean, sigma)   #Normalized policy outputs (probabilities of actions)
+        #beta = self.beta_activation(self.beta)
+        beta_dist = Beta(action_alpha_beta[:3], action_alpha_beta[3:])   #Normalized policy outputs (probabilities of actions)
 
         if self.type_alg == 2:
             #Forward in the critic network
             x_critic = self.tanh(self.fc1_critic(x))
             x_critic = self.tanh(self.fc2_critic(x_critic))
             action_value = self.fc3_critic(x_critic)
-            return normal_dist, action_value
+            return beta_dist, action_value, (action_alpha_beta[:3].detach(), action_alpha_beta[3:].detach())
         
-        return normal_dist
+        return beta_dist, (action_alpha_beta[:3].detach(), action_alpha_beta[3:].detach())
 
 
 class Value(torch.nn.Module):
@@ -169,8 +173,8 @@ class Agent(object):
         elif self.type_alg == 2:
 
             # Compute boostrapped discounted return estimates
-            _, state_values = self.policy(states)                # V(s_t)
-            _, next_state_values = self.policy(next_states)      # V(s_{t+1})
+            _, state_values,_ = self.policy(states)                # V(s_t)
+            _, next_state_values,_ = self.policy(next_states)      # V(s_{t+1})
             done = done.float()
 
             td_target = rewards + self.gamma * next_state_values * (1 - done)  # if done=1 → no bootstrapping
@@ -195,8 +199,7 @@ class Agent(object):
         """
         Reset the I value to 1 for the next episode (type_alg == 2)
         """
-        self.I = 1           
-        
+        self.I = 1     
         return 
     
 
@@ -210,21 +213,24 @@ class Agent(object):
         @return action_log_prob probability of chosen action (joint probability of the three action values)
         """
         x = torch.from_numpy(state).float().to(self.train_device)
-        out = self.policy(x)
+        out,(alpha,beta) = self.policy(x)
 
         if isinstance(out, tuple):
-            normal_dist = out[0]  # ignore Critic if present (type_alg == 2)
+            beta_dist = out[0]  # ignore Critic if present (type_alg == 2)
+            beta_dist_det = Beta(alpha,beta)[0]
         else:
-            normal_dist = out
+            beta_dist = out
+            beta_dist_det = Beta(alpha,beta)
            
         if evaluation:  # Return mean
-            return normal_dist.mean, None
+            return beta_dist.mean, None, beta_dist_det
         else:   # Sample from the distribution  (choose an action)
-            action = normal_dist.sample()
+            action = beta_dist.sample()
             # Compute Log probability of the action [ log(p(a[0] AND a[1] AND a[2])) = log(p(a[0])*p(a[1])*p(a[2])) = log(p(a[0])) + log(p(a[1])) + log(p(a[2])) ]
-            action_log_prob = normal_dist.log_prob(action).sum()
-            return action, action_log_prob, normal_dist
-        
+            action_log_prob = beta_dist.log_prob(action).sum()
+            return action, action_log_prob, beta_dist_det
+    
+
     def get_probs(self, state, action):
         """ 
         Computation of action_log_prob given action
@@ -234,14 +240,14 @@ class Agent(object):
         @return action_log_prob probability of chosen action (joint probability of the three action values)
         """
         x = torch.from_numpy(state).float().to(self.train_device)
-        out = self.policy(x)
+        out,_ = self.policy(x)
 
         if isinstance(out, tuple):
-            normal_dist = out[0]  # ignore Critic if present (type_alg == 2)
+            beta_dist = out[0]  # ignore Critic if present (type_alg == 2)
         else:
-            normal_dist = out
+            beta_dist = out
         # Compute Log probability of the action [ log(p(a[0] AND a[1] AND a[2])) = log(p(a[0])*p(a[1])*p(a[2])) = log(p(a[0])) + log(p(a[1])) + log(p(a[2])) ]
-        action_log_prob = normal_dist.log_prob(action).sum()
+        action_log_prob = beta_dist.log_prob(action).sum()
         return action_log_prob
 
 
