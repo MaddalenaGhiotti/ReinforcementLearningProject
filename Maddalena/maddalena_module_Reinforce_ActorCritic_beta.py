@@ -52,26 +52,28 @@ def project_l1(delta, d):
     return projected
 
 
-def pgd(action, normal_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3, budget = 0.2):  #TODO choose iperparameters
+def pgd(action, beta_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3, budget = 0.2):  #TODO choose iperparameters
+	epsilon = 1e-6
 	action_adv = action.clone().detach().requires_grad_(True)
-	print('action:',action_adv)
 	optimizer = torch.optim.SGD(params=[action_adv],lr=alpha_adv)
 	for i in range(max_pgd_steps):
-		loss_adv = normal_dist.log_prob(action_adv).sum()
+		loss_adv = beta_dist.log_prob(action_adv).sum()
 		optimizer.zero_grad()
 		loss_adv.backward()
 		action_old=action_adv.clone()
 		optimizer.step()
+		with torch.no_grad():
+			action_adv.clamp_(epsilon, 1 - epsilon)
 		delta = action_adv - action_old
 		if torch.norm(delta) < eps:
-			print('break: ',i)
+			#print('break: ',i)
 			break
 	perturbation = action_adv-action
-	print('perturbation:',perturbation)
+	#print('perturbation:',perturbation)
 	project_pert = projection(n_norm, perturbation, budget)
-	action_pert = (action + project_pert).clamp(-1,1).detach().requires_grad_(True)  #Go back to valid interval for actions (-1,1)
-	print('perturbed action:',action_pert)
-	print()
+	action_pert = (action + project_pert).clamp(epsilon, 1 - epsilon).detach() #.requires_grad_(True)  #Go back to valid interval for actions (-1,1)
+	#action_pert = (action + project_pert).clamp(0,1).detach()
+	#print()
 	return action_pert
 
 
@@ -188,11 +190,28 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
-			action, action_probabilities, normal_dist = agent.get_action(state)
+			for name, param in agent.policy.named_parameters():
+				if torch.isnan(param).any():
+					print(f"NaN in {name} before get_action")
+			action, action_probabilities, beta_dist = agent.get_action(state)
+			###############################################################################
+			#if pert_bound:
+    		# Semplice "perturbazione" per test senza PGD
+			#	with torch.no_grad():
+			#		action = action.clamp(0,1)  # Forza azione nell'intervallo valido
+			#		noise = (torch.rand_like(action) - 0.5) * 0.1  # piccolo rumore [-0.05, +0.05]
+			#		epsilon = 1e-6
+			#		action = (action + noise).clamp(epsilon, 1 - epsilon).detach()
+			#		#action = (action + noise).clamp(0,1)  # Aggiungi rumore ma rimetti in [0,1]
+			#		print('pert action:', action)
+
+			#	action_probabilities = agent.get_probs(state, action)
+			#	print('action probs:', action_probabilities)
+			###############################################################################
 			if pert_bound:
-				action = torch.clamp(action, min=-1, max=1) ########################################################## Verificare!
+				#action = torch.clamp(action, min=-1, max=1) ########################################################## Verificare!
 				b = curriculum_budget(pert_bound, episode, n_episodes)
-				action = pgd(action.detach(), normal_dist, budget = b)
+				action = pgd(action.detach(), beta_dist, budget = b)
 				action_probabilities = agent.get_probs(state, action)
 			previous_state = state
 			action = action*2-1  ######################################################REMOVE!!!

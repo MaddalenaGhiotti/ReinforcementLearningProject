@@ -32,8 +32,7 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
         self.fc1_actor = torch.nn.Linear(state_space, self.hidden)
         self.fc2_actor = torch.nn.Linear(self.hidden, self.hidden)
         self.fc3_actor = torch.nn.Linear(self.hidden, action_space*2)
-
-        self.actor_alpha_beta = torch.nn.Softplus()
+        #self.softplus_actor = torch.nn.Softplus()
 
         #Learned standard deviation for exploration at training time 
         #self.beta_activation = F.softplus
@@ -57,11 +56,24 @@ class Policy(torch.nn.Module):  #Sub-class of NN PyTorch class
 
 
     def forward(self, x):
-        #Forward in the actor network
+        # === DEBUG CHECKS ===
+        #print("fc1_actor weights NaN?:", torch.isnan(self.fc1_actor.weight).any())
+        #print("fc1_actor bias NaN?:", torch.isnan(self.fc1_actor.bias).any())
+    
+        #print("fc1 weight stats:", self.fc1_actor.weight.mean(), self.fc1_actor.weight.std())
+
+        for name, param in self.named_parameters():
+            if torch.isnan(param).any():
+                print(f"{name} contains NaN")
+            #Forward in the actor network
+
         x_actor = self.tanh(self.fc1_actor(x))
+        #print('NN1:',x_actor)
         x_actor = self.tanh(self.fc2_actor(x_actor))
-        x_actor = self.tanh(self.fc3_actor(x_actor))
-        action_alpha_beta = self.actor_alpha_beta(x_actor)
+        #print('NN2:',x_actor)
+        action_alpha_beta = F.softplus(self.fc3_actor(x_actor))+1
+        #action_alpha_beta = self.softplus_actor(x_actor)
+        #print('NN output:',action_alpha_beta)
 
         #beta = self.beta_activation(self.beta)
         beta_dist = Beta(action_alpha_beta[:3], action_alpha_beta[3:])   #Normalized policy outputs (probabilities of actions)
@@ -91,8 +103,13 @@ class Value(torch.nn.Module):
 
         self.init_weights()
 
-
     def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, torch.nn.Linear):
+                torch.nn.init.xavier_uniform_(m.weight)  # Inizializzazione Xavier più stabile
+                torch.nn.init.zeros_(m.bias)
+
+    def init_weights2(self):
         for m in self.modules():
             if type(m) is torch.nn.Linear:
                 torch.nn.init.normal_(m.weight)
@@ -110,7 +127,7 @@ class Value(torch.nn.Module):
 
 
 class Agent(object):
-    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3):
+    def __init__(self, type_alg, policy, value = None, device='cpu', baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-4):
         self.train_device = device
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=optim_lr)   #Optimization algorithm on the policy parameters
