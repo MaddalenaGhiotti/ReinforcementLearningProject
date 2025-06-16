@@ -10,6 +10,12 @@ import gym
 from gym import utils
 from .mujoco_env import MujocoEnv
 
+import random
+
+SEED = 42  
+np.random.seed(SEED)
+random.seed(SEED)
+
 
 class CustomHopper(MujocoEnv, utils.EzPickle):
     def __init__(self, domain=None, train_mode=True):
@@ -32,10 +38,9 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         # TASK 6: implement domain randomization. Remember to sample new dynamics parameter
         #         at the start of each training episode.
 
-        new_masses = self.original_masses * np.random.uniform(0.5, 1.5, size=self.original_masses.shape)
-        self.sim.model.body_mass[1:] = new_masses
+        new_masses = self.original_masses[1:] * np.random.uniform(0.5, 1.5, size=self.original_masses.shape)
+        self.sim.model.body_mass[2:] = new_masses
 
-        #raise NotImplementedError()
 
         return new_masses
 

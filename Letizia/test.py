@@ -8,7 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from env.custom_hopper import *
-from agent import Agent, Policy
+from Letizia.agent import Agent, Policy
 
 def parse_args():  # parsing vuol dire che stiamo prendendo gli argomenti da terminale
     parser = argparse.ArgumentParser()
