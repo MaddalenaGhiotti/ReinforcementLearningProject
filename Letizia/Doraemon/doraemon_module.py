@@ -1,13 +1,7 @@
 """
 Implementation of DORAEMON: Domain Randomization via Entropy Maximization.
-Supports both PPO and SAC algorithms via Stable-Baselines3.
-This version contiene implementazioni complete di:
-  • Importance Sampling per il vincolo di performance
-  • Ottimizzazione dell’entropia con aggiornamento reale dei parametri Beta
-Assume che ogni CustomHopperDoraemon tenga un buffer di episodi in
-self.episode_buffer = [{'dynamics': masses, 'return': R}, ...]
-e che esponga env_method('get_buffer') che lo restituisce e poi lo resetti
-con env_method('reset_buffer').
+Supports both PPO algorithm via Stable-Baselines3.
+
 """
 import os
 import numpy as np
@@ -18,6 +12,9 @@ from scipy.optimize import minimize, NonlinearConstraint
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
+from typing import List, Tuple
+
 from custom_hopper_doraemon import CustomHopperDoraemon
 
 MIN_PARAM, MAX_PARAM = 0.2, 5.0  # sigmoid bounds for beta parameters
@@ -26,153 +23,152 @@ MIN_PARAM, MAX_PARAM = 0.2, 5.0  # sigmoid bounds for beta parameters
 # DomainRandDistribution
 
 class DomainRandDistribution:
-    """Multivariate Beta in [m, M] per dimension."""
-    def __init__(self, dr_type: str, distr: list):
-        assert dr_type == 'beta', 'Only beta supported'
-        self.distr = distr.copy()
+    """Multivariate Beta on dimension‑specific intervals."""
+
+    def __init__(self, distr: List[dict]):  # each dict: {m,M,a,b}
+        self.distr = distr
         self.ndims = len(distr)
-        params = []
-        for d in distr:
-            params += [d['a'], d['b']]
-        self.params = torch.tensor(params, dtype=torch.float32, requires_grad=True)
-        self._build_distributions()
+        self.params = torch.tensor([v for d in distr for v in (d["a"], d["b"])], dtype=torch.float32, requires_grad=True)
+        self._build()
 
-    # utilities
-    def _build_distributions(self):
-        self.to_distr = [Beta(self.params[2*i].clamp_min(0.05),self.params[2*i+1].clamp_min(0.05)) for i in range(self.ndims)]
+    def _build(self):
+        self.to_distr = [
+            Beta(self.params[2 * i].clamp_min(0.05), self.params[2 * i + 1].clamp_min(0.05))
+            for i in range(self.ndims)
+        ]
 
-    def get_stacked_bounds(self):
-        return np.array([[d['m'], d['M']] for d in self.distr]).reshape(-1)
-
-    def entropy(self):
-        h = 0
+    # ---------------- entropy / KL ---------------------------------------
+    def entropy(self) -> torch.Tensor:
+        h = 0.0
         for i, d in enumerate(self.distr):
-            m, M = d['m'], d['M'] 
-            h += self.to_distr[i].entropy() + torch.log(torch.tensor(M-m))  # entropy H(X*(M-m)+m) = H(X) + log(M-m)
+            m, M = d["m"], d["M"]
+            h += self.to_distr[i].entropy() + torch.log(torch.tensor(M - m))
         return h
-    
+
     def kl_divergence(self, other: "DomainRandDistribution") -> float:
-        assert self.ndims == other.ndims, "KL divergence requires distributions with the same number of dimensions"
-        kl = sum(kl_divergence(p, q) for p, q in zip(self.to_distr, other.to_distr))
-        return float(kl)
-
+        return float(sum(kl_divergence(p, q) for p, q in zip(self.to_distr, other.to_distr)))
     
- 
-    # Convenience helpers used by DORAEMON
- 
-    def get_stacked_params(self) -> np.ndarray:
-        """Return the current Beta parameters as a flat numpy array
-        [a1, b1, a2, b2, ...]  (length = 2 * ndims)."""
-        return self.params.detach().numpy()
+        # -------- helper: stacked bounds ------------------------------------
+    def get_stacked_bounds(self) -> np.ndarray:
+        """
+        Return [m1, M1, m2, M2, ...]  (shape = 2*ndims)
+        utile per la costruzione di una nuova distribuzione con beta_from_stacked().
+        """
+        return np.array([[d["m"], d["M"]] for d in self.distr]).ravel()
 
 
-    # -------- sampling / pdf
-    def sample(self, n_samples=1):
+    # ---------------- sampling / pdf -------------------------------------
+    def sample(self, n: int = 1) -> np.ndarray:
         vals = []
         for i, d in enumerate(self.distr):
-            m, M = d['m'], d['M']
-            x = self.to_distr[i].sample((n_samples,)).numpy()
-            vals.append(x*(M-m)+m)
+            m, M = d["m"], d["M"]
+            x = self.to_distr[i].sample((n,)).numpy()
+            vals.append(x * (M - m) + m)
         return np.stack(vals, axis=1)
 
-    def _univariate_pdf(self, value, i, log=False): # we need log for importance sampling
-        d = self.distr[i]
-        m, M = d['m'], d['M']
-        # standardize in [0,1]
-        z = (value-m)/(M-m)
-        z = torch.as_tensor(z, dtype=self.params.dtype)
+    def _uni_pdf(self, x, i: int, log=False):
+        m, M = self.distr[i]["m"], self.distr[i]["M"]
+        z = (torch.as_tensor(x) - m) / (M - m)
         if log:
-            return self.to_distr[i].log_prob(torch.tensor(z)) - torch.log(torch.tensor(M-m))
-        else:
-            return torch.exp(self.to_distr[i].log_prob(torch.tensor(z)))/(M-m)
+            return self.to_distr[i].log_prob(z) - torch.log(torch.tensor(M - m))
+        return torch.exp(self.to_distr[i].log_prob(z)) / (M - m)
 
-    def pdf(self, x, log=False):
+    def pdf(self, x, *, log=False):
         x = torch.as_tensor(x, dtype=self.params.dtype)
-        if x.ndim == 1:          # (ndims,) → (1, ndims)
+        if x.ndim == 1:
             x = x.unsqueeze(0)
-
-        dens = 0 if log else 1
+        res = 0.0 if log else 1.0
         for i in range(self.ndims):
-            dens = dens + self._univariate_pdf(x[:, i], i, log=True) if log \
-               else dens * self._univariate_pdf(x[:, i], i, log=False)
-        return dens
+            res = res + self._uni_pdf(x[:, i], i, log=True) if log else res * self._uni_pdf(x[:, i], i)
+        return res
 
-
-    # ------------ helper static
+    # ---------------- helpers --------------------------------------------
     @staticmethod
-    def sigmoid(x_opt, lb, ub): #for mapping parameters to [lb, ub] in optimization
-        x_opt = torch.tensor(x_opt)
-        return (ub-lb)/(1+torch.exp(-x_opt))+lb
+    def sigmoid(x, lb, ub):
+        x = torch.as_tensor(x)
+        return (ub - lb) / (1 + torch.exp(-x)) + lb
 
     @staticmethod
     def inv_sigmoid(x, lb, ub):
-        return -np.log((ub-lb)/(x-lb)-1)
+        return -np.log((ub - lb) / (x - lb) - 1)
 
     @staticmethod
-    def beta_from_stacked(stacked_bounds, stacked_params): # build a domain-randomized Beta distribution candidate for DORAEMON
-        distr = []
-        for i in range(len(stacked_bounds)//2):
-            d = {
-                'm': stacked_bounds[2*i],
-                'M': stacked_bounds[2*i+1],
-                'a': stacked_params[2*i],
-                'b': stacked_params[2*i+1]
-            }
-            distr.append(d)
-        return DomainRandDistribution('beta', distr)
+    def beta_from_stacked(bounds: np.ndarray, params: np.ndarray) -> "DomainRandDistribution":
+        d = []
+        for i in range(len(bounds) // 2):
+            d.append({"m": bounds[2 * i], "M": bounds[2 * i + 1], "a": params[2 * i], "b": params[2 * i + 1]})
+        return DomainRandDistribution(d)
+
+    # ------------- quick helper ----------------------------------------
+    def as_numpy(self) -> np.ndarray:
+        """Return current Beta parameters as a detached NumPy array."""
+        return self.params.detach().numpy()
 
 
 # TrainingSubRtn 
 
 class TrainingSubRtn:
-    """
-    Training subroutine for DORAEMON.
-    It handles the RL training using Stable-Baselines3, evaluates the policy,
-    and manages the environment for domain randomization.
-    """
-    def __init__(self, env_id, dr_distribution, algo='PPO', lr=3e-4, gamma=0.99, seed=0,
-                 n_eval_episodes=50, eval_freq=10000, return_threshold=500, device='cpu', run_path='.', verbose=0):
-        self.env_id = env_id
+    def __init__(
+        self,
+        dr_distribution: DomainRandDistribution,
+        lr=3e-4,
+        gamma=0.99,
+        seed=42,
+        n_eval_episodes=50,
+        return_threshold=500.0,
+        device="cpu",
+        run_path=".",
+    ):
         self.dr_distribution = dr_distribution
-        self.algo = algo.upper()
-        self.lr = lr
-        self.gamma = gamma
-        self.seed = seed
         self.n_eval_episodes = n_eval_episodes
         self.return_threshold = return_threshold
-        self.eval_freq = eval_freq
         self.device = device
         self.run_path = run_path
-        self.verbose = verbose
-        self._env_ref = None  # keep reference to access buffer
+        
+        def make_env():
+            return CustomHopperDoraemon(
+                dr_distribution=self.dr_distribution,
+                train_mode=True,
+                return_threshold=return_threshold,
+                domain="source",
+            )
 
-    def _make_env_fn(self):
-        return CustomHopperDoraemon(dr_distribution=self.dr_distribution, train_mode=True, return_threshold=self.return_threshold)
+        self.vec_env = DummyVecEnv([make_env])
+        self._env_ref = self.vec_env.envs[0]
 
-    def train(self, iter_idx, perf_thresh, max_steps, stopEarly=False):
-        env = DummyVecEnv([self._make_env_fn]) # create a vectorized environment for Stable-Baselines3
-        self._env_ref = env.envs[0]  # first (and only) env
-        eval_env = CustomHopperDoraemon(dr_distribution=self.dr_distribution, train_mode=False, return_threshold=self.return_threshold)
+    
+        self.model = PPO(
+                "MlpPolicy",
+                self.vec_env,
+                learning_rate=lr,
+                gamma=gamma,
+                n_steps=2048,
+                batch_size=64,
+                n_epochs=20,
+                verbose=0,
+                seed=seed,
+                device=device,
+            )
+        
+    # -------------------------------- train & evaluate on source
+    def train(self, iter_idx: int, max_steps: int) -> tuple:
+        self.model.learn(total_timesteps=max_steps, reset_num_timesteps=False)
+        eval_env = Monitor(
+            CustomHopperDoraemon(
+                dr_distribution=self.dr_distribution,
+                train_mode=False,
+                return_threshold=self.return_threshold,
+                domain="source",
+            )
+        )
+        mean, std = evaluate_policy(self.model, eval_env, n_eval_episodes=self.n_eval_episodes, deterministic=True)
+        self.model.save(os.path.join(self.run_path, f"model_iter{iter_idx}"))
+        return mean, std, max_steps
 
-        if self.algo == 'PPO':
-            model = PPO('MlpPolicy', env, learning_rate=self.lr, gamma=self.gamma,
-                        verbose=0, device=self.device, seed=self.seed)
-        else:
-            model = SAC('MlpPolicy', env, learning_rate=self.lr, gamma=self.gamma,
-                        verbose=0, device=self.device, seed=self.seed)
-        model.learn(total_timesteps=max_steps)
-
-        mean_r, std_r = evaluate_policy(model, eval_env, n_eval_episodes=self.n_eval_episodes, deterministic=True)
-        model.save(os.path.join(self.run_path, f'model_iter{iter_idx}'))
-        return mean_r, std_r, model.policy.state_dict(), model, max_steps
-
-    #  buffer helpers
     def get_buffer(self):
-        """Retrieve the buffer of dynamics and successes from the environment."""
-        buf = self._env_ref.get_buffer()          
-        dynamics  = np.array([b["dynamics"] for b in buf])
-        successes = np.array([b["success"]  for b in buf])
-        return dynamics, successes
+        buf = self._env_ref.get_buffer(); self._env_ref.reset_buffer()
+        dyn = np.array([b["dynamics"] for b in buf]); succ = np.array([b["success"] for b in buf])
+        return dyn, succ
     
 
 
@@ -181,136 +177,144 @@ class TrainingSubRtn:
 # DORAEMON main loop 
 
 class DORAEMON:
-    def __init__(self, env_id, init_distr, target_distr, performance_lower_bound, return_threshold,
-                 kl_upper_bound, algo='PPO', seed=0, budget=1_000_000, max_training_steps=100_000,
-                 verbose=1):
-        self.training_subrtn = TrainingSubRtn(env_id, init_distr, algo=algo, seed=seed, verbose=verbose, return_threshold=return_threshold)
-        self.current_distr = init_distr
-        self.performance_lower_bound = performance_lower_bound
-        self.kl_upper_bound = kl_upper_bound
-        self.return_threshold = return_threshold 
+    def __init__(
+        self,
+        *,
+        init_distr: DomainRandDistribution,
+        performance_lower_bound: float,
+        return_threshold: float,
+        kl_upper_bound: float,
+        seed: int = 42,
+        budget: int = 1_000_000,
+        max_training_steps: int = 100_000,
+        verbose: int = 1,
+    ):
+        self.train_sub = TrainingSubRtn(
+            init_distr,
+            seed=seed,
+            return_threshold=return_threshold,
+        )
+        self.current = init_distr
+        self.perf_lb = performance_lower_bound
+        self.kl_ub = kl_upper_bound
+        self.return_threshold = return_threshold
         self.budget = budget
-        self.max_training_steps = max_training_steps
+        self.max_ts = max_training_steps
         self.verbose = verbose
-        self.iteration = 0
-        print(f"Init entropy: {self.current_distr.entropy().item():.3f}")
+        self.iter = 0
 
-    def is_there_budget(self):
-        return self.budget > 0
+        if self.verbose:
+            print(f"Init entropy: {self.current.entropy():.3f}")
 
-    def step(self):
-        if not self.is_there_budget():
-            return False
+    # --------------------------------------------------------------
+    def _update_distribution(self, dyn: torch.Tensor, succ: torch.Tensor):
+        """Solve the constrained optimisation to update Beta params."""
 
-        # RL training
-        mean_r, std_r, _, _, used_ts = self.training_subrtn.train(self.iteration, self.performance_lower_bound,
-                                                                  min(self.budget, self.max_training_steps))
-        self.budget -= used_ts
-        print(f"Iter {self.iteration}: reward {mean_r:.1f} ± {std_r:.1f}  budget {self.budget}")
+        bounds = self.current.get_stacked_bounds()
 
-        # gather buffer (dynamics, returns)
-        dynamics, successes = self.training_subrtn.get_buffer()
-        dyn = torch.as_tensor(dynamics, dtype=self.current_distr.params.dtype)
-        succ = torch.as_tensor(successes,  dtype=self.current_distr.params.dtype)
-
-
-        # build optimisation elements
-        stacked_bounds = self.current_distr.get_stacked_bounds()
-
-        # perfrormance constraint: importance sampling
+        # ----- performance constraint (importance sampling) ----------
         def perf_fn(x_opt):
-            beta_params = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM)
-            proposed = DomainRandDistribution.beta_from_stacked(stacked_bounds, beta_params)
-            w_log = proposed.pdf(dyn, log=True) - self.current_distr.pdf(dyn, log=True)
-            w = torch.exp(w_log)
-            est = torch.mean(w * succ).item()
-            return est
+            beta_par = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM)
+            cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
+            w_log = cand.pdf(dyn, log=True) - self.current.pdf(dyn, log=True)
+            return float(torch.mean(torch.exp(w_log) * succ))
 
-        # check if performance constraint is feasible
-        perf_cons = NonlinearConstraint(perf_fn, lb=self.performance_lower_bound, ub=np.inf)
+        perf_cons = NonlinearConstraint(perf_fn, lb=self.perf_lb, ub=np.inf)
 
-        #  KL divergence constraint 
+        # ----- KL constraint ----------------------------------------
         def kl_fn(x_opt):
-            beta_params = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
-            cand = DomainRandDistribution.beta_from_stacked(stacked_bounds, beta_params)
-            return self.current_distr.kl_divergence(cand)
-        
-        # KL divergence constraint: KL(φ_prev || φ_cand) <= ε
-        kl_cons = NonlinearConstraint(fun=kl_fn,
-                              lb=-np.inf,
-                              ub=self.kl_upper_bound)  
+            beta_par = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
+            cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
+            return self.current.kl_divergence(cand)
 
-        # entropy maximization (-entropy minimization)
+        kl_cons = NonlinearConstraint(kl_fn, lb=-np.inf, ub=self.kl_ub)
+
+        # ----- objective: maximise entropy (≡ minimise -entropy) -----
         def objective(x_opt):
-            beta_params = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
-            proposed = DomainRandDistribution.beta_from_stacked(stacked_bounds, beta_params)
-            return -proposed.entropy().item()
-        
-        # starting point for optimization
-        x0 = DomainRandDistribution.inv_sigmoid(self.current_distr.get_stacked_params(), MIN_PARAM, MAX_PARAM)
+            beta_par = DomainRandDistribution.sigmoid(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
+            cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
+            return -cand.entropy().item()
 
-        enforce_perf = perf_fn(x0) >= self.performance_lower_bound
+        # ----- optimisation start point -----------------------------
+        x0 = DomainRandDistribution.inv_sigmoid(self.current.as_numpy(), MIN_PARAM, MAX_PARAM)
 
-        if not enforce_perf:
-           
-            res_try = minimize(
-            fun=lambda x: -perf_fn(x),       # maximize performance
-            x0=x0,
-            method='trust-constr',
-            constraints=[kl_cons],           # only KL constraint
-            options={'xtol':1e-6,'gtol':1e-4,'maxiter':50}
-            )
-
-            if perf_fn(res_try.x) >= self.performance_lower_bound:
-            # we got to a feasible point under KL constraint, use it as starting point
-                x0 = res_try.x
-                enforce_perf = True
-                if self.verbose:
-                    print("Backup distribution found: it satisfies performance bound.")
-            else:
-            # performance bound not satisfied, but we maximized it under KL constraint
-                x0 = res_try.x
-                if self.verbose:
-                    print("Backup distribution found, but it does not satisfy performance bound.")
-        # final constraints
-        constraints = [kl_cons, perf_cons] if enforce_perf else [kl_cons]
-        fun_objective = objective if enforce_perf else lambda x: -perf_fn(x)         
-
-        # run scipy optimiser 
         res = minimize(
-            fun=fun_objective,
+            fun=objective,
             x0=x0,
-            method='trust-constr',
-            constraints=constraints,
-            options={'xtol': 1e-6, 'gtol': 1e-4, 'maxiter': 100}
+            method="trust-constr",
+            constraints=[perf_cons, kl_cons],
+            options={"xtol": 1e-6, "gtol": 1e-4, "maxiter": 100},
         )
 
-        ok = res.success and (perf_fn(res.x) >= self.performance_lower_bound if enforce_perf else True)
-
-        if not ok:
-            if self.verbose:
-                print("Fallback: max performance under KL constraint.")
-            
+        # fallback: maximise perf under KL if entropy solve failed
+        if not res.success:
             res = minimize(
                 fun=lambda x: -perf_fn(x),
                 x0=x0,
-                method='trust-constr',
+                method="trust-constr",
                 constraints=[kl_cons],
-                options={'xtol':1e-6, 'gtol':1e-4, 'maxiter':100}
+                options={"xtol": 1e-6, "gtol": 1e-4, "maxiter": 100},
             )
 
-        # update distribution with solution (if feasible)
-        opt_params = DomainRandDistribution.sigmoid(res.x, MIN_PARAM, MAX_PARAM).detach().numpy()
+        # update current distribution
+        new_params = DomainRandDistribution.sigmoid(res.x, MIN_PARAM, MAX_PARAM).detach().numpy()
         with torch.no_grad():
-            self.current_distr.params.copy_(torch.tensor(opt_params))
-            self.current_distr._build_distributions()
+            self.current.params.copy_(torch.tensor(new_params))
+            self.current._build()
 
-        print(f"Iter {self.iteration}: entropy {self.current_distr.entropy():.3f}, perf {perf_fn(res.x):.3f}, KL {kl_fn(res.x):.3f}")
-        self.iteration += 1
+        return perf_fn(res.x), kl_fn(res.x)
+
+    # --------------------------------------------------------------
+    def step(self) -> bool:
+        """One DORAEMON iteration: train → optimise φ → log → eval on target."""
+        if self.budget <= 0:
+            return False
+
+        # ----- RL training on source --------------------------------
+        max_steps = min(self.budget, self.max_ts)
+        mean_src, std_src, used_ts = self.train_sub.train(self.iter, max_steps)
+        self.budget -= used_ts
+
+        if self.verbose:
+            print(f"Iter {self.iter}: source R {mean_src:.1f} ± {std_src:.1f} | budget {self.budget}")
+
+        # ----- collect buffer & update distribution -----------------
+        dyn_np, succ_np = self.train_sub.get_buffer()
+        dyn = torch.as_tensor(dyn_np, dtype=self.current.params.dtype)
+        succ = torch.as_tensor(succ_np, dtype=self.current.params.dtype)
+
+        perf_val, kl_val = self._update_distribution(dyn, succ)
+        ent_val = self.current.entropy().item()
+
+        # ----- evaluate on TARGET domain ----------------------------
+        target_env = Monitor(
+            CustomHopperDoraemon(
+                dr_distribution=self.current,
+                train_mode=False,
+                return_threshold=self.return_threshold,
+                domain="target",
+            )
+        )
+        mean_tgt, std_tgt = evaluate_policy(
+            self.train_sub.model,
+            target_env,
+            n_eval_episodes=self.train_sub.n_eval_episodes,
+            deterministic=True,
+        )
+
+        if self.verbose:
+            print(
+                f"Iter {self.iter}: entropy {ent_val:.3f} | perf {perf_val:.3f} | "
+                f"KL {kl_val:.3f} | target R {mean_tgt:.2f} ± {std_tgt:.2f}"
+            )
+
+        self.iter += 1
         return True
 
+    # --------------------------------------------------------------
     def run(self):
         while self.step():
             pass
-        print("DORAEMON finished. Final entropy:", self.current_distr.entropy().item())
+        print(f"DORAEMON finished. Final entropy: {self.current.entropy().item():.3f}")
+
 

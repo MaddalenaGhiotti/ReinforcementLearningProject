@@ -2,6 +2,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.distributions import Normal
+import random
+
+SEED = 42  # Set a seed for reproducibility
+
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
 
 
 def discount_rewards(r, gamma):

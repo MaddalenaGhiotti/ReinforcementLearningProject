@@ -3,6 +3,12 @@ import gym
 from gym import utils
 from env.mujoco_env import MujocoEnv
 
+import random
+
+SEED = 42  
+np.random.seed(SEED)
+random.seed(SEED)
+
 class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
     """Hopper environment tailored for the DORAEMON loop.
 
@@ -42,8 +48,6 @@ class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
         # optional domain presets 
         if domain == 'source':       # lighter torso
             self.sim.model.body_mass[1] *= 0.7
-        elif domain == 'target':     # heavier torso
-            self.sim.model.body_mass[1] *= 1.3
 
 
 
@@ -63,17 +67,17 @@ class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
     # Domain-randomisation utilities
 
     def sample_parameters(self):
-        """Sample a new set of masses (shape: 4,) according to the DR distribution."""
-        scale_factors = (self.dr_distribution.sample(1)[0]           # (4,) valori in [0.5,1.5]
+        """Sample a new set of randomized masses (shape: 3,) according to the DR distribution."""
+        scale_factors = (self.dr_distribution.sample(1)[0]          
                         if self.dr_distribution is not None
-                        else np.random.uniform(0.5, 1.5, size=self.original_masses.shape))  # uniform in [0.5, 1.5] if no distribution is provided       
-        masses = self.original_masses * scale_factors   
+                        else np.random.uniform(0.5, 1.5, size=self.original_masses[1:].shape))  # uniform in [0.5, 1.5] if no distribution is provided       
+        masses = self.original_masses[1:] * scale_factors   
         self._current_scale = scale_factors             # meomrize the current scaling factors
         return masses
 
     def set_parameters(self, masses: np.ndarray):
         """Apply the given masses to the MuJoCo model."""
-        self.sim.model.body_mass[1:] = masses
+        self.sim.model.body_mass[2:] = masses
 
 
     # MuJoCoEnv API overrides
