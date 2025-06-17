@@ -1,50 +1,94 @@
+import os
 import gym
-from env.custom_hopper import *           # assume che registri già gli id
+
+
+import numpy as np
+import torch
 from stable_baselines3 import PPO
-from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.evaluation import evaluate_policy
 
 
-def train_and_test(train_domain="source", test_domain="target", seed=42):
-    # ---------- training env ----------
-    if train_domain == "source":
-        train_env = gym.make("CustomHopper-source-v0", train_mode=True)
-    elif train_domain == "target":
-        train_env = gym.make("CustomHopper-target-v0", train_mode=True)
-    else:
-        raise ValueError("train_domain must be 'source' or 'target'")
+# ------------------------------------------------------------------
+class PPOTrainer:
+    """
+    Wrapper to train and evaluate PPO on CustomHopper-{source|target}-v0.
+    """
 
-    train_env.seed(seed); train_env.action_space.seed(seed)
+    def __init__(
+        self,
+        train_domain = "source",
+        test_domain = "target",
+        seed = 42,
+        total_timesteps = 100_000,
+        model_path = "ppo_hopper",
+    ) -> None:
 
-    print("State space :", train_env.observation_space)
-    print("Action space:", train_env.action_space)
-    print("Default masses:", train_env.get_parameters())
+        if train_domain not in {"source", "target"}:
+            raise ValueError("train_domain must be 'source' or 'target'")
+        if test_domain not in {"source", "target"}:
+            raise ValueError("test_domain must be 'source' or 'target'")
 
-    model = PPO(
-        "MlpPolicy",
-        train_env,
-        learning_rate=1e-3,
-        n_steps=2048,
-        batch_size=64,
-        n_epochs=20,
-        seed=seed,
-        verbose=1,
-    )
+        self.train_id = f"CustomHopper-{train_domain}-v0"
+        self.test_id  = f"CustomHopper-{test_domain}-v0"
+        self.seed = seed
+        self.total_timesteps = total_timesteps
+        self.model_path = model_path
 
-    model_path = "ppo_hopper"
-    model.learn(total_timesteps=int(1e5), tb_log_name=model_path)
-    model.save(model_path)
-    print("Training completed and model saved.\n")
+        # reproducibility
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
-    # ---------- evaluation env ----------
-    eval_id = "CustomHopper-source-v0" if test_domain == "source" else "CustomHopper-target-v0"
-    eval_env = Monitor(gym.make(eval_id, train_mode=False))
-    eval_env.seed(seed); eval_env.action_space.seed(seed)
+        # ------------- make envs -----------------
+        self.train_env = gym.make(self.train_id, train_mode=True)
+        self.train_env.seed(seed)
+        self.train_env.action_space.seed(seed)
 
-    mean_r, std_r = evaluate_policy(model, eval_env, n_eval_episodes=50, deterministic=True)
-    print(f"Mean reward on {test_domain} domain: {mean_r:.2f} ± {std_r:.2f}")
+        self.eval_env  = Monitor(gym.make(self.test_id, train_mode=False))
+        self.eval_env.seed(seed)
+        self.eval_env.action_space.seed(seed)
+
+        # ------------- build model ---------------
+        self.model = PPO(
+            "MlpPolicy",
+            self.train_env,
+            learning_rate=1e-3,
+            n_steps=2048,
+            batch_size=64,
+            n_epochs=20,
+            seed=seed,
+            verbose=1,
+        )
+
+    # ------------------------------------------------------------
+    def train(self) -> None:
+        """
+        Train the PPO agent for the configured number of timesteps
+        and save it to disk.
+        """
+
+        self.model.learn(total_timesteps=self.total_timesteps, tb_log_name=self.model_path)
+        self.model.save(self.model_path)
+        print(" Training completed and model saved.\n")
+
+    # ------------------------------------------------------------
+    def evaluate(self, n_episodes: int = 50, deterministic: bool = True) -> tuple:
+        """
+        Evaluate the trained model on the selected test domain.
+        Returns (mean_reward, std_reward).
+        """
+        mean_r, std_r = evaluate_policy(
+            self.model, self.eval_env, n_eval_episodes=n_episodes, deterministic=deterministic
+        )
+        print(f"Mean reward on {self.test_id}: {mean_r:.2f} ± {std_r:.2f}")
+        return mean_r, std_r
+
+    # ------------------------------------------------------------
+    def run(self) -> None:
+        """Convenience helper: train then evaluate."""
+        self.train()
+        self.evaluate()
 
 
-if __name__ == "__main__":
-    train_and_test("source", "target")
+
 

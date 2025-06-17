@@ -38,7 +38,7 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         # TASK 6: implement domain randomization. Remember to sample new dynamics parameter
         #         at the start of each training episode.
 
-        new_masses = self.original_masses[1:] * np.random.uniform(0.5, 1.5, size=self.original_masses.shape)
+        new_masses = self.original_masses[1:] * np.random.uniform(0.5, 1.5, size=self.original_masses[1:].shape)
         self.sim.model.body_mass[2:] = new_masses
 
 
@@ -53,7 +53,7 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
 
     def set_parameters(self, task):
         """Set each hopper link's mass to a new value"""
-        self.sim.model.body_mass[1:] = task
+        self.sim.model.body_mass[2:] = task
 
 
     def step(self, a):

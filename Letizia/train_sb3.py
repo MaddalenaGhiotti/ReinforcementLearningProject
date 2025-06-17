@@ -13,9 +13,13 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a control policy on the Hopper environment')
-    parser.add_argument('--train_env', type=str, default='CustomHopper-source-v0', help='Environment ID [source,target]')
+    parser.add_argument('--train_env', type=str, default='source', help='Environment ID [source,target]')
     parser.add_argument('--algo', type=str, default='PPO', choices=['PPO', 'SAC'], help='RL algorithm to use [PPO, SAC]')
+    
+    if hasattr(__import__('builtins'), '__IPYTHON__'):
+        return parser.parse_args([])
     return parser.parse_args()
+
 
 
 def main():
@@ -46,16 +50,17 @@ def main():
         model = PPO('MlpPolicy', 
                     train_env,
                     verbose=1,
-                    learning_rate=1e-3,
-                    n_steps=2048,
-                    batch_size=64,
-                    n_epochs=20,
-                    tensorboard_log="./ppo_hopper_tensorboard/")    
+                    learning_rate=1e-4,
+                    n_steps=4096,
+                    batch_size=256,
+                    n_epochs=10,
+                    tensorboard_log=None,
+                    seed=42)    
     elif algo == 'SAC':
         # SAC algorithm
         model = SAC('MlpPolicy', 
                     train_env,
-                    verbose=1,
+                    verbose=0,
                     learning_rate=1e-3,
                     buffer_size=1000000,
                     batch_size=256,
@@ -64,12 +69,13 @@ def main():
                     train_freq=(1, 'step'),
                     gradient_steps=1,
                     learning_starts=1000,
-                    tensorboard_log="./sac_hopper_tensorboard/")
+                    tensorboard_log="./sac_hopper_tensorboard/",
+                    seed=42)
         
     # Train the model   
     # PPO    
     model_path="ppo_hopper" if algo == 'PPO' else "sac_hopper"
-    model.learn(total_timesteps=int(2e6), tb_log_name=model_path)
+    model.learn(total_timesteps=800_000, tb_log_name=model_path)
 
     # Save the model
     model.save(model_path)
