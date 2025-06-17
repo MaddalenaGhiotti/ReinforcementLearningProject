@@ -26,6 +26,7 @@ torch.manual_seed(GLOBAL_SEED)
 
 from custom_hopper_doraemon import CustomHopperDoraemon
 
+MIN_PARAM, MAX_PARAM = 0.05, 30.0
 
 
 # DomainRandDistribution
@@ -92,10 +93,14 @@ class DomainRandDistribution:
 
     # ---------------- helpers --------------------------------------------
     @staticmethod
-    def positive_param(z_raw, lb=0.05):
-        z_t = torch.as_tensor(z_raw, dtype=torch.float32)        # -> Tensor
-        out = lb + F.softplus(z_t)                               # softplus
-        return out.detach().cpu().numpy()   
+    def sigmoid_param(x, MIN_PARAM, MAX_PARAM) -> np.ndarray:
+        """Transform x to a sigmoid function in [MIN_PARAM, MAX_PARAM]."""
+        return MIN_PARAM + (MAX_PARAM - MIN_PARAM) / (1 + np.exp(-x))
+    
+    @staticmethod
+    def inverse_sigmoid_param(x, MIN_PARAM, MAX_PARAM) -> np.ndarray:
+        """Inverse of sigmoid_param."""
+        return -np.log((MAX_PARAM - MIN_PARAM) / (x - MIN_PARAM) - 1)
 
 
     @staticmethod
@@ -117,7 +122,7 @@ class TrainingSubRtn:
     def __init__(
         self,
         dr_distribution: DomainRandDistribution,
-        lr=1e-4,
+        lr=1e-3,
         seed=42,
         n_eval_episodes=50,
         return_threshold=500.0,
@@ -193,8 +198,8 @@ class DORAEMON:
         return_threshold: float,
         kl_upper_bound: float,
         seed: int = 42,
-        budget: int = 4_000_000,
-        max_training_steps: int = 800_000,
+        budget: int = 1_000_000,
+        max_training_steps: int = 200_000,
         verbose: int = 1,
     ):
         self.train_sub = TrainingSubRtn(
@@ -222,7 +227,7 @@ class DORAEMON:
 
         # ----- performance constraint (importance sampling) ----------
         def perf_fn(x_opt):
-            beta_par = DomainRandDistribution.positive_param(x_opt, lb=0.05)
+            beta_par = DomainRandDistribution.sigmoid_param(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
             cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
             w_log = cand.pdf(dyn, log=True) - self.current.pdf(dyn, log=True)
             return float(torch.mean(torch.exp(w_log) * succ))
@@ -231,7 +236,7 @@ class DORAEMON:
 
         # ----- KL constraint ----------------------------------------
         def kl_fn(x_opt):
-            beta_par = DomainRandDistribution.positive_param(x_opt, lb=0.05)
+            beta_par = DomainRandDistribution.sigmoid_param(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
             cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
             return self.current.kl_divergence(cand)
 
@@ -239,31 +244,19 @@ class DORAEMON:
 
         # ----- objective: maximise entropy (≡ minimise -entropy) -----
         def objective(x_opt):
-            beta_par = DomainRandDistribution.positive_param(x_opt, lb=0.05)
+            beta_par = DomainRandDistribution.sigmoid_param(x_opt, MIN_PARAM, MAX_PARAM).detach().numpy()
             cand = DomainRandDistribution.beta_from_stacked(bounds, beta_par)
             return -cand.entropy().item()
 
         # ----- optimisation start point -----------------------------
         x0 = self.current.params.detach().numpy()
-
-        def jac_entropy(x):
-            x_t = torch.tensor(x, requires_grad=True)
-
-            alpha = 0.05 + F.softplus(x_t[0::2])
-            beta  = 0.05 + F.softplus(x_t[1::2])
-
-            base = torch.distributions.Beta(alpha, beta)
-            entropy = base.entropy().sum()
-            (-entropy).backward()
-            return x_t.grad.detach().numpy()
-
+        x0 = DomainRandDistribution.inverse_sigmoid_param(x0, MIN_PARAM, MAX_PARAM)
 
         res = minimize(fun=objective,
                 x0=x0,
-               jac=jac_entropy,
-               method="SLSQP",
+               method="trust-constr",
                constraints=[perf_cons, kl_cons],
-               options={"maxiter": 200, "ftol": 1e-8, "disp": True})
+               options={"maxiter": 200, "xtol": 1e-6, "gtol": 1e-4})
 
         
         # fallback: maximise perf under KL if entropy solve failed
@@ -277,7 +270,7 @@ class DORAEMON:
             )
 
         # update current distribution
-        new_params = DomainRandDistribution.positive_param(res.x, lb=0.05)
+        new_params = DomainRandDistribution.sigmoid_param(res.x, MIN_PARAM, MAX_PARAM)
         with torch.no_grad():
             self.current.params.copy_(torch.tensor(new_params))
             self.current._build()

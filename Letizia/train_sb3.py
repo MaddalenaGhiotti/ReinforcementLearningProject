@@ -50,7 +50,7 @@ def main():
         model = PPO('MlpPolicy', 
                     train_env,
                     verbose=1,
-                    learning_rate=1e-4,
+                    learning_rate=1e-3,
                     n_steps=4096,
                     batch_size=256,
                     n_epochs=10,
@@ -75,7 +75,7 @@ def main():
     # Train the model   
     # PPO    
     model_path="ppo_hopper" if algo == 'PPO' else "sac_hopper"
-    model.learn(total_timesteps=800_000, tb_log_name=model_path)
+    model.learn(total_timesteps=200_000, tb_log_name=model_path)
 
     # Save the model
     model.save(model_path)
