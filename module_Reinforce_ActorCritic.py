@@ -109,7 +109,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
-			action, action_probabilities = agent.get_action(state)
+			action, action_probabilities, _ = agent.get_action(state)
 			previous_state = state
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
@@ -124,7 +124,6 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			torch.save(agent.policy.state_dict(), "models/"+model_name+'.mdl')
 			print('Training episode:', episode+1)
 			print('Episode return:', train_reward)
-
 		#Save a partial model if return over threshold
 		if not threshold_bool and every_return.mean()>starting_threshold:
 			print('Threshold reached')
@@ -134,7 +133,15 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		#Update policy
 		start2_time = time.time()
 		if type_alg==0:
+			start2_time = time.time()
 			agent.update_policy()
+			update_time = time.time() - start2_time
+		else:
+			update_time = 0.0
+
+		episode_time = traject_time + update_time
+
+
 		
 		#Save data
 		episode_time = traject_time + (time.time()-start2_time)

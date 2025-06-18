@@ -18,12 +18,13 @@ random.seed(SEED)
 
 
 class CustomHopper(MujocoEnv, utils.EzPickle):
-    def __init__(self, domain=None, train_mode=True):
+    def __init__(self, domain=None, train_mode=True, use_udr=False):
         MujocoEnv.__init__(self, 4)
         utils.EzPickle.__init__(self)
 
         self.original_masses = np.copy(self.sim.model.body_mass[1:])    # Default link masses
         self.train_mode = train_mode
+        self.use_udr = use_udr
         if domain == 'source':  # Source environment has an imprecise torso mass (-30% shift)
             self.sim.model.body_mass[1] *= 0.7
 
@@ -90,7 +91,7 @@ class CustomHopper(MujocoEnv, utils.EzPickle):
         """Reset the environment to a random initial state"""
 
         #task 6: set random parameters at the start of each episode (while training)
-        if self.train_mode:  
+        if self.train_mode and self.use_udr:
             self.set_random_parameters()
 
         qpos = self.init_qpos + self.np_random.uniform(low=-.005, high=.005, size=self.model.nq)
