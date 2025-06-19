@@ -2,6 +2,7 @@ import numpy as np
 import gym
 from gym import utils
 from env.mujoco_env import MujocoEnv
+import torch
 
 import random
 
@@ -71,7 +72,8 @@ class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
         scale_factors = (self.dr_distribution.sample(1)[0]          
                         if self.dr_distribution is not None
                         else np.random.uniform(0.5, 1.5, size=self.original_masses[1:].shape))  # uniform in [0.5, 1.5] if no distribution is provided       
-        masses = self.original_masses[1:] * scale_factors   
+        masses = torch.tensor(self.original_masses[1:], dtype=scale_factors.dtype, device=scale_factors.device) * scale_factors
+   
         self._current_scale = scale_factors             # meomrize the current scaling factors
         return masses
 
@@ -116,21 +118,30 @@ class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
         #  termination
         done = not (np.isfinite(self.state_vector()).all() and height > 0.7 and abs(ang) < 0.2)
 
+        info = {
+            "episode": {
+            "r": self._episode_return,
+            "l": self.sim.data.time  # oppure un tuo contatore di step
+            },
+                "is_success": float(self._episode_return >= self.return_threshold),
+            }
+
+
         # buffer logging
         if done: 
             ep_rec = {
                 "dynamics": np.copy(self._current_scale),
                 "return":   self._episode_return,
-            }
-            is_success = float(self._episode_return >= self.return_threshold)
-            ep_rec["success"] = is_success
-
-        
+                "success":  info["is_success"]
+                }
+            
             self._global_buffer.append(ep_rec)
-
             self._episode_return = 0.0
-        
-        return self._get_obs(), reward, done, {}
+
+        return self._get_obs(), reward, done, info
+    
+
+
 
 # Gym registration
 

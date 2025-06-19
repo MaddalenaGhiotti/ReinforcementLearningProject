@@ -152,9 +152,10 @@ class Agent(object):
         elif self.type_alg == 1:
             value_states = self.value(states)
             advantage_term = rewards+self.gamma*self.value(next_states)*(1-done)-value_states
-            advantage_term = advantage_term.detach()
-            actor_loss_fn = -torch.mean(action_log_probs*advantage_term)
-            critic_loss_fn = -torch.mean(value_states*advantage_term)
+
+            actor_loss_fn = -action_log_probs*advantage_term.detach()
+            
+            critic_loss_fn = 1/2*(advantage_term.pow(2))
             # ACTOR: compute gradients and step the optimizer
             self.optimizer.zero_grad()
             actor_loss_fn.backward()   #Compute the gradients of the loss w.r.t. each parameter
