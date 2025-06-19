@@ -194,20 +194,6 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 				if torch.isnan(param).any():
 					print(f"NaN in {name} before get_action")
 			action, action_probabilities, beta_dist = agent.get_action(state)
-			###############################################################################
-			#if pert_bound:
-    		# Semplice "perturbazione" per test senza PGD
-			#	with torch.no_grad():
-			#		action = action.clamp(0,1)  # Forza azione nell'intervallo valido
-			#		noise = (torch.rand_like(action) - 0.5) * 0.1  # piccolo rumore [-0.05, +0.05]
-			#		epsilon = 1e-6
-			#		action = (action + noise).clamp(epsilon, 1 - epsilon).detach()
-			#		#action = (action + noise).clamp(0,1)  # Aggiungi rumore ma rimetti in [0,1]
-			#		print('pert action:', action)
-
-			#	action_probabilities = agent.get_probs(state, action)
-			#	print('action probs:', action_probabilities)
-			###############################################################################
 			if pert_bound:
 				#action = torch.clamp(action, min=-1, max=1) ########################################################## Verificare!
 				b = curriculum_budget(pert_bound, episode, n_episodes)
@@ -284,7 +270,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 ##############################################################################
 
-def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, pert_bound=None, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, pert_bound=None, random_state=42, device='cpu', print_res=True):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
@@ -303,9 +289,10 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 		return
 	env.seed(random_state)
 
-	print('Action space:', env.action_space)
-	print('State space:', env.observation_space)
-	print('Dynamics parameters:', env.get_parameters())
+	if print_res:
+		print('Action space:', env.action_space)
+		print('State space:', env.observation_space)
+		print('Dynamics parameters:', env.get_parameters())
 	
 	observation_space_dim = env.observation_space.shape[-1]
 	action_space_dim = env.action_space.shape[-1]
@@ -326,17 +313,18 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 
 		#Build trajectory
 		while not done:
-			action, _, normal_dist = agent.get_action(state, evaluation=True)
+			action, _, beta_dist = agent.get_action(state, evaluation=True)
 			if pert_bound:
-				action = torch.clamp(action, min=-1, max=1) ########################################################## Verificare!
-				action = pgd(action.detach(), normal_dist, budget = pert_bound)
+				action = torch.clamp(action, min=0, max=1) ########################################################## Verificare!
+				action = pgd(action.detach(), beta_dist, budget = pert_bound)
+			action = action*2-1
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			if render:  
 				env.render()  #Show rendering
 			test_reward += reward
-
 		#Print results
-		print(f"Episode: {episode} | Return: {test_reward}")
+		if print_res:
+			print(f"Episode: {episode} | Return: {test_reward}")
 		returns.append(test_reward)
 
 	return returns
