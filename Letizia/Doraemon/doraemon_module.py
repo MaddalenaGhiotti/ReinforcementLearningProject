@@ -9,16 +9,17 @@ import torch
 from torch.distributions.beta import Beta
 from torch.distributions.kl import kl_divergence
 from scipy.optimize import minimize, NonlinearConstraint
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
+from scipy.stats import beta
 from typing import List
 
 
 import random
 
-GLOBAL_SEED = 42
+GLOBAL_SEED = 0
 random.seed(GLOBAL_SEED)
 np.random.seed(GLOBAL_SEED)
 torch.manual_seed(GLOBAL_SEED)
@@ -96,6 +97,44 @@ class DomainRandDistribution:
         for i in range(self.ndims):
             res = res + self._uni_pdf(x[:, i], i, log=True) if log else res * self._uni_pdf(x[:, i], i)
         return res
+    
+    # ------------------- for numpy compatibility ------------------------
+
+    def _uni_pdf_np(self, x: np.ndarray, i: int, log: bool = False) -> np.ndarray:
+        """numpy univariate pdf (or log pdf)."""
+        params = self.as_numpy()              
+        a, b = params[2*i], params[2*i+1]
+        m, M = self.distr[i]["m"], self.distr[i]["M"]
+        z = (x - m) / (M - m)
+        if log:
+            return beta.logpdf(z, a, b) - np.log(M - m)
+        return beta.pdf(z, a, b) / (M - m)
+
+    def pdf_np(self, x: np.ndarray, *, log: bool = False) -> np.ndarray:
+        """NumPy multivariate pdf."""
+        if x.ndim == 1:
+            x = x[None, :]
+        if log:
+            out = np.zeros(x.shape[0])
+            for i in range(self.ndims):
+                out += self._uni_pdf_np(x[:, i], i, log=True)
+            return out
+        else:
+            out = np.ones(x.shape[0])
+            for i in range(self.ndims):
+                out *= self._uni_pdf_np(x[:, i], i, log=False)
+            return out
+
+    def entropy_np(self) -> float:
+        """ NumPy entropy"""
+        params = self.as_numpy()
+        h = 0.0
+        for i, d in enumerate(self.distr):
+            m, M = d["m"], d["M"]
+            a, b = params[2*i], params[2*i+1]
+            h += beta.entropy(a, b) + np.log(M - m)
+        return h
+
 
     # ---------------- helpers --------------------------------------------
     @staticmethod
@@ -132,7 +171,6 @@ class TrainingSubRtn:
         self,
         dr_distribution: DomainRandDistribution,
         lr=1e-3,
-        seed=42,
         n_eval_episodes=50,
         return_threshold=500.0,
         device="cpu",
@@ -163,11 +201,11 @@ class TrainingSubRtn:
             "MlpPolicy",
             self.vec_env,
             learning_rate=lr,
-            n_steps=4096,          
-            batch_size=256,
+            n_steps=2048,          
+            batch_size=64,
             n_epochs=10,
             verbose=0,
-            seed=seed,
+            seed=GLOBAL_SEED,
             device=device,       
         )      
 
@@ -209,14 +247,12 @@ class DORAEMON:
         performance_lower_bound: float,
         return_threshold: float,
         kl_upper_bound: float,
-        seed: int = 42,
         budget: int = 1_000_000,
         max_training_steps: int = 100_000,
         verbose: int = 1,
     ):
         self.train_sub = TrainingSubRtn(
             init_distr,
-            seed=seed,
             return_threshold=return_threshold,
         )
         self.current = init_distr
@@ -236,45 +272,44 @@ class DORAEMON:
         """Solve the constrained optimisation to update Beta params."""
 
         bounds = self.current.get_stacked_bounds()
+        dyn_np = dyn.detach().numpy()
+        succ_np = succ.detach().numpy()
 
-        @torch.no_grad()
-        def _build_candidate(self, x_opt_np: np.ndarray) -> DomainRandDistribution:
+        
+        def _build_candidate(x_opt_np: np.ndarray) -> DomainRandDistribution:
             """Build a candidate distribution from the optimised parameters."""
-            beta_par = torch.tensor(
-            DomainRandDistribution.sigmoid_param(x_opt_np, MIN_PARAM, MAX_PARAM),
-            dtype=self.current.params.dtype,
-            device=self.current.params.device)
+            beta_par = DomainRandDistribution.sigmoid_param(x_opt_np, MIN_PARAM, MAX_PARAM)
             return DomainRandDistribution.beta_from_stacked(bounds, beta_par)
 
         # ----- performance constraint (importance sampling) ----------
         def perf_fn(x_opt):
-            cand = _build_candidate(self, x_opt)
-            w_log = cand.pdf(dyn, log=True) - self.current.pdf(dyn, log=True)
-            return float(torch.mean(torch.exp(w_log) * succ))
+            cand = _build_candidate(x_opt)
+            w_log = cand.pdf_np(dyn_np, log=True) - self.current.pdf_np(dyn_np, log=True)
+            return np.mean(np.exp(w_log) * succ_np)
 
         perf_cons = NonlinearConstraint(perf_fn, lb=self.perf_lb, ub=np.inf)
 
         # ----- KL constraint ----------------------------------------
         def kl_fn(x_opt):
-            cand = _build_candidate(self, x_opt)
+            cand = _build_candidate(x_opt)
             return self.current.kl_divergence(cand)
 
         kl_cons = NonlinearConstraint(kl_fn, lb=-np.inf, ub=self.kl_ub)
 
         # ----- objective: maximise entropy (= minimise -entropy) -----
         def objective(x_opt):
-            cand = _build_candidate(self, x_opt)
-            return -cand.entropy()
+            cand = _build_candidate(x_opt)
+            return -cand.entropy_np()
 
         # ----- optimisation start point -----------------------------
-        x0 = self.current.params.detach().numpy()
+        x0 = self.current.as_numpy()
         x0 = DomainRandDistribution.inverse_sigmoid_param(x0, MIN_PARAM, MAX_PARAM)
 
         res = minimize(fun=objective,
                 x0=x0,
                method="trust-constr",
                constraints=[perf_cons, kl_cons],
-               options={"maxiter": 200, "xtol": 1e-6, "gtol": 1e-4})
+               options={"maxiter": 100, "xtol": 1e-6})
 
         
         # fallback: maximise perf under KL if entropy solve failed
@@ -284,14 +319,20 @@ class DORAEMON:
                 x0=x0,
                 method="trust-constr",
                 constraints=[kl_cons],
-                options={"xtol": 1e-6, "gtol": 1e-4, "maxiter": 200},
+                options={"maxiter": 100, "xtol": 1e-6}
             )
 
         # update current distribution
         new_params = DomainRandDistribution.sigmoid_param(res.x, MIN_PARAM, MAX_PARAM)
         with torch.no_grad():
-            self.current.params.copy_(torch.tensor(new_params))
+            self.current.params.data = torch.tensor(
+                    new_params,
+                    dtype=self.current.params.dtype,
+                    device=self.current.params.device,
+                    requires_grad=True
+                    )
             self.current._build()
+
 
         return perf_fn(res.x), kl_fn(res.x)
 
