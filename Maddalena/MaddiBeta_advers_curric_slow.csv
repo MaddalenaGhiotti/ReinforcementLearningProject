@@ -1,1 +1,0 @@
-model_name,type_alg,hopper,n_episodes,trained_model,baseline,gamma,optim_lr,layer_size,save_every,random_state,returns,returns_AvgLast,returns_AvgBeginning,times,times_AvgLast,times_AvgBeginning,tot_time
