@@ -7,7 +7,7 @@ import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
-
+from Letizia.env.custom_hopper import *
 
 # ------------------------------------------------------------------
 class PPOTrainer:
@@ -22,6 +22,13 @@ class PPOTrainer:
         seed = 42,
         total_timesteps = 100_000,
         model_path = "ppo_hopper",
+        learning_rate=1e-3,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=20,
+        verbose=0,
+        n_eval_episodes=50,
+        use_udr=False
     ) -> None:
 
         if train_domain not in {"source", "target"}:
@@ -34,13 +41,20 @@ class PPOTrainer:
         self.seed = seed
         self.total_timesteps = total_timesteps
         self.model_path = model_path
+        self.learning_rate = learning_rate
+        self.n_steps = n_steps
+        self.batch_size = batch_size
+        self.n_epochs = n_epochs
+        self.verbose = verbose
+        self.n_eval_episodes = n_eval_episodes
+        self.use_udr = use_udr
 
         # reproducibility
         np.random.seed(seed)
         torch.manual_seed(seed)
 
         # ------------- make envs -----------------
-        self.train_env = gym.make(self.train_id, train_mode=True)
+        self.train_env = gym.make(self.train_id, train_mode=True, use_udr=self.use_udr)
         self.train_env.seed(seed)
         self.train_env.action_space.seed(seed)
 
@@ -52,12 +66,12 @@ class PPOTrainer:
         self.model = PPO(
             "MlpPolicy",
             self.train_env,
-            learning_rate=1e-3,
-            n_steps=2048,
-            batch_size=64,
-            n_epochs=20,
+            learning_rate=self.learning_rate,
+            n_steps=self.n_steps,
+            batch_size=self.batch_size,
+            n_epochs=self.n_epochs,
             seed=seed,
-            verbose=1,
+            verbose=self.verbose,
         )
 
     # ------------------------------------------------------------
@@ -72,13 +86,13 @@ class PPOTrainer:
         print(" Training completed and model saved.\n")
 
     # ------------------------------------------------------------
-    def evaluate(self, n_episodes: int = 50, deterministic: bool = True) -> tuple:
+    def evaluate(self, deterministic: bool = True) -> tuple:
         """
         Evaluate the trained model on the selected test domain.
         Returns (mean_reward, std_reward).
         """
         mean_r, std_r = evaluate_policy(
-            self.model, self.eval_env, n_eval_episodes=n_episodes, deterministic=deterministic
+            self.model, self.eval_env, n_eval_episodes=self.n_eval_episodes, deterministic=deterministic
         )
         print(f"Mean reward on {self.test_id}: {mean_r:.2f} ± {std_r:.2f}")
         return mean_r, std_r
