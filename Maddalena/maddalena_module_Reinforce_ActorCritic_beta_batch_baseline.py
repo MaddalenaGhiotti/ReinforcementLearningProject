@@ -52,7 +52,7 @@ def project_l1(delta, d):
     return projected
 
 
-def pgd(action, beta_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3, budget = 0.2):  #TODO choose iperparameters
+def pgd(action, beta_dist, n_norm=2, max_pgd_steps=1, eps=1e-3, alpha_adv=1, budget = 0.2):  #TODO choose iperparameters 1e-3
 	epsilon = 1e-6
 	action_adv = action.clone().detach().requires_grad_(True)
 	optimizer = torch.optim.SGD(params=[action_adv],lr=alpha_adv)
@@ -60,6 +60,8 @@ def pgd(action, beta_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3,
 		loss_adv = beta_dist.log_prob(action_adv).sum()
 		optimizer.zero_grad()
 		loss_adv.backward()
+		#print(action_adv.grad.norm())
+		#torch.nn.utils.clip_grad_norm_(action_adv,0.1)   #Bring gradient norm to 0.1 if bigger
 		action_old=action_adv.clone()
 		optimizer.step()
 		with torch.no_grad():
@@ -76,7 +78,7 @@ def pgd(action, beta_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3,
 	#print()
 	return action_pert
 
-
+'''
 def pgd2(action, normal_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3, budget = 0.2):  #TODO choose iperparameters
 	action_prev = action.clone().detach().requires_grad_(True)   #TODO understand
 	for i in range(max_pgd_steps):
@@ -98,7 +100,7 @@ def pgd2(action, normal_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e
 	project_pert = projection(n_norm, perturbation, budget)
 	action_pert = (action + project_pert).clamp(-1,1).detach().requires_grad_(True)  #Go back to valid interval for actions (-1,1): .clamp(-1,1) (?)
 	return action_pert
-
+'''
 
 
 def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, batch_sz=1, gamma=0.99, alpha=0.9, optim_lr=1e-3, layer_size=64, pert_bound=None, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):

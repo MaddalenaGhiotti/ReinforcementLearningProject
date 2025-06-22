@@ -179,7 +179,8 @@ class Agent(object):
                 tot_loss = 0
                 for i, (action_log_probs, returns) in enumerate(zip(self.probs_list, self.return_list)):
                     loss_fn =-torch.mean(action_log_probs * (returns-baseline[:returns.size(dim=0)]))
-                    tot_loss = tot_loss*(i/(i+1))+loss_fn/(i+1)
+                    #tot_loss = tot_loss*(i/(i+1))+loss_fn/(i+1)
+                    tot_loss += loss_fn
                 self.optimizer.zero_grad()
                 tot_loss.backward()   #Compute the gradients of the loss w.r.t. each parameter
                 torch.nn.utils.clip_grad_norm_(self.policy.parameters(),1)   #Bring gradient norm to 1 if bigger

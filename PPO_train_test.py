@@ -4,6 +4,7 @@ import gym
 
 import numpy as np
 import torch
+import time
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -28,6 +29,7 @@ class PPOTrainer:
         n_epochs=20,
         verbose=0,
         n_eval_episodes=50,
+        tensorboard_log='PPO_hopper_tensorboard',
         use_udr=False
     ) -> None:
 
@@ -47,6 +49,7 @@ class PPOTrainer:
         self.n_epochs = n_epochs
         self.verbose = verbose
         self.n_eval_episodes = n_eval_episodes
+        self.tensorboard_log = tensorboard_log
         self.use_udr = use_udr
 
         # reproducibility
@@ -72,6 +75,7 @@ class PPOTrainer:
             n_epochs=self.n_epochs,
             seed=seed,
             verbose=self.verbose,
+            tensorboard_log=self.tensorboard_log
         )
 
     # ------------------------------------------------------------
@@ -80,10 +84,12 @@ class PPOTrainer:
         Train the PPO agent for the configured number of timesteps
         and save it to disk.
         """
-
+        start = time.time()
         self.model.learn(total_timesteps=self.total_timesteps, tb_log_name=self.model_path)
+        train_time = time.time() - start
         self.model.save(self.model_path)
         print(" Training completed and model saved.\n")
+        return train_time
 
     # ------------------------------------------------------------
     def evaluate(self, deterministic: bool = True) -> tuple:
@@ -100,8 +106,8 @@ class PPOTrainer:
     # ------------------------------------------------------------
     def run(self) -> None:
         """Convenience helper: train then evaluate."""
-        self.train()
-        self.evaluate()
+        train_time = self.train()
+        return self.evaluate(), train_time
 
 
 
