@@ -310,6 +310,10 @@ class DORAEMON:
                method="trust-constr",
                constraints=[perf_cons, kl_cons],
                options={"maxiter": 100, "xtol": 1e-6})
+        
+        print("Maximize entropy success:", res.success, "| message:", res.message)
+        print(" perf_fn(old):", perf_fn(x0), " perf_fn(opt):", perf_fn(res.x))
+        print(" kl_fn(opt):", kl_fn(res.x))
 
         
         # fallback: maximise perf under KL if entropy solve failed
@@ -321,16 +325,21 @@ class DORAEMON:
                 constraints=[kl_cons],
                 options={"maxiter": 100, "xtol": 1e-6}
             )
+            print("Maximize performance success (backup):", res.success, "| message:", res.message)
+            print(" perf_fn(old):", perf_fn(x0), " perf_fn(opt):", perf_fn(res.x))
+            print(" kl_fn(opt):", kl_fn(res.x))
+
+        
 
         # update current distribution
         new_params = DomainRandDistribution.sigmoid_param(res.x, MIN_PARAM, MAX_PARAM)
+
+        new_t = torch.as_tensor(new_params,
+                                dtype=self.current.params.dtype,
+                                device=self.current.params.device
+)
         with torch.no_grad():
-            self.current.params.data = torch.tensor(
-                    new_params,
-                    dtype=self.current.params.dtype,
-                    device=self.current.params.device,
-                    requires_grad=True
-                    )
+            self.current.params.data.copy_(new_t)
             self.current._build()
 
 
