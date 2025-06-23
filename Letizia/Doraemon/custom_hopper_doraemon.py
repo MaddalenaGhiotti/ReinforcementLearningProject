@@ -1,7 +1,7 @@
 import numpy as np
 import gym
 from gym import utils
-from env.mujoco_env import MujocoEnv
+from Letizia.env.mujoco_env import MujocoEnv
 import torch
 
 import random
@@ -121,7 +121,7 @@ class CustomHopperDoraemon(MujocoEnv, utils.EzPickle):
         info = {
             "episode": {
             "r": self._episode_return,
-            "l": self.sim.data.time  # oppure un tuo contatore di step
+            "l": self.sim.data.time  
             },
                 "is_success": float(self._episode_return >= self.return_threshold),
             }
