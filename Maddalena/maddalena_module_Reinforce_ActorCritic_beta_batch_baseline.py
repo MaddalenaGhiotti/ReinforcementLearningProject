@@ -226,8 +226,8 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 		#Update policy
 		start2_time = time.time()
 		if type_alg==0:
-			if episode==30000:
-				agent.batch_sz=20
+			if episode%30000==0 and episode!=0:
+				agent.batch_sz+=10
 			agent.update_policy()
 		
 		#Save data
