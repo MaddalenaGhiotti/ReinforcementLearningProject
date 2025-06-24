@@ -1,7 +1,7 @@
 import numpy as np
 import gym
 from gym import utils
-from Letizia.env.mujoco_env import MujocoEnv
+from env.mujoco_env import MujocoEnv
 import torch
 
 import random
