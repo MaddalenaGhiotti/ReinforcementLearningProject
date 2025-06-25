@@ -8,7 +8,7 @@ import time
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
-from Letizia.env.custom_hopper import *
+from custom_hopper import *
 
 # ------------------------------------------------------------------
 class PPOTrainer:
