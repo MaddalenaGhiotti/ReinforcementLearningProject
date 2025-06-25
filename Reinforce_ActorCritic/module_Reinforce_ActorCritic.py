@@ -15,7 +15,7 @@ import csv
 #Problem specific
 import torch
 import gym
-from ..env.custom_hopper import *
+from env.custom_hopper import *
 from classes import Agent, Policy, Value
 
 
