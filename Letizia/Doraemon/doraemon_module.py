@@ -29,7 +29,7 @@ random.seed(GLOBAL_SEED)
 np.random.seed(GLOBAL_SEED)
 torch.manual_seed(GLOBAL_SEED)
 
-from custom_hopper_doraemon import CustomHopperDoraemon
+from env.custom_hopper_doraemon import CustomHopperDoraemon
 
 MIN_PARAM, MAX_PARAM = 0.05, 30.0 # min and max values for Beta parameters 
 
@@ -84,8 +84,8 @@ class DomainRandDistribution:
 
         # calculate KL dimension-wise:
         # D = ln B(a1,b1) - ln B(a0,b0)
-        #   + (a0 - a1) ψ(a0) + (b0 - b1) ψ(b0)
-        #   - (a0+b0 - a1 - b1) ψ(a0+b0)
+        #   + (a0 - a1) psi(a0) + (b0 - b1) psi(b0)
+        #   - (a0+b0 - a1 - b1) psi(a0+b0)
         term = (
             lgamma(a1) + lgamma(b1) - lgamma(a1 + b1)
             - (lgamma(a0) + lgamma(b0) - lgamma(a0 + b0))
@@ -368,19 +368,17 @@ class DORAEMON:
             da = dsig[0::2]
             db = dsig[1::2]
 
-            # 3) Compute trigamma values (ψ₁) at a, b, and a+b
+            # 3) Compute trigamma values (psi) at a, b, and a+b
             psi1_a  = polygamma(1, a)
             psi1_b  = polygamma(1, b)
             psi1_ab = polygamma(1, a + b)
 
             # 4) Partial derivatives of the Beta entropy H(a,b)
-            #    ∂H/∂a = (a+b−2)·ψ₁(a+b) − (a−1)·ψ₁(a)
-            #    ∂H/∂b = (a+b−2)·ψ₁(a+b) − (b−1)·ψ₁(b)
+            
             dH_da = (a + b - 2) * psi1_ab - (a - 1) * psi1_a
             dH_db = (a + b - 2) * psi1_ab - (b - 1) * psi1_b
 
-            # 5) Chain rule: ∇ₓ[−H] = −(∂H/∂a)*da  for x[0::2]
-            #                    −(∂H/∂b)*db  for x[1::2]
+            # 5) Chain rule
             grad = np.zeros_like(x)
             grad[0::2] = -dH_da * da
             grad[1::2] = -dH_db * db
@@ -389,9 +387,8 @@ class DORAEMON:
         
         def grad_perf_obj(x, dyn_np, succ_np, bounds, curr: DomainRandDistribution):
             """
-            ∇ₓ [-perf_fn(x)] where
-            perf_fn(x) = E_curr [ exp(w_log(x)) * succ_np ],
-            w_log(x) = log p_cand(dyn|x) − log p_curr(dyn)
+            ∇ₓ [-perf_fn(x)] 
+            
             """
             ab   = DomainRandDistribution.sigmoid_param(x, MIN_PARAM, MAX_PARAM)
             cand = DomainRandDistribution.beta_from_stacked(bounds, ab)
@@ -402,14 +399,14 @@ class DORAEMON:
             w_log     = logp_cand - logp_curr
             w         = np.exp(w_log)              
 
-            # SNIS estimate
+            #  estimate
             sum_w     = w.sum()
             perf_hat  = float((w * succ_np).sum() / sum_w)
 
             # data normalisation
-            # dyn_np: shape (K, ndims)
+            
             z = (dyn_np - np.array([d['m'] for d in curr.distr])) / \
-            np.array([d['M']-d['m'] for d in curr.distr])  # shape (K,ndims)
+            np.array([d['M']-d['m'] for d in curr.distr])  
 
             # precompute digamma for log‐pdf derivative
             a = ab[0::2]; b = ab[1::2]
@@ -429,26 +426,25 @@ class DORAEMON:
             # loop dims
             K, nd = dyn_np.shape
             for i in range(curr.ndims):
-                # ∂ log p_beta / ∂ a, ∂ b for each sample k
+                # d log p_beta / d a, d b for each sample k
                 lnz   = np.log(z[:, i].clip(1e-12, 1-1e-12))
                 ln1z  = np.log((1-z[:, i]).clip(1e-12, 1-1e-12))
-                dlogp_da = lnz   - psi_a[i]  + psi_ab[i]   # shape (K,)
+                dlogp_da = lnz   - psi_a[i]  + psi_ab[i]   
                 dlogp_db = ln1z  - psi_b[i]  + psi_ab[i]
 
-                # combine into ∂ log p_cand / ∂ x
+                # combine into d log p_cand / d x
                 # note: x[2i]→a_i, x[2i+1]→b_i
-                # ∂ logp/∂x_j = dlogp/∂a * da  or * db
-                term_a = dlogp_da * da[i]  # shape (K,)
+                # d logp/dx_j = dlogp/da * da  or * db
+                term_a = dlogp_da * da[i]  
                 term_b = dlogp_db * db[i]
 
-                # weights for SNIS gradient: w_k*(s_k - perf_hat)/sum_w
+                # weights: w_k*(s_k - perf_hat)/sum_w
                 coeff = w * (succ_np - perf_hat) / sum_w  # shape (K,)
-
-                # now sum_k coeff[k] * term_a[k] etc.
+              
                 grad[2*i]   = np.dot(coeff, term_a)
                 grad[2*i+1] = np.dot(coeff, term_b)
 
-            return -grad  # shape (2*ndims,)
+            return -grad  
 
         # ----- optimisation start point -----------------------------
         x0 = self.current.as_numpy()
@@ -512,7 +508,7 @@ class DORAEMON:
 
     # --------------------------------------------------------------
     def step(self) -> bool:
-        """One DORAEMON iteration: train → optimise → log → eval on target."""
+        """One DORAEMON iteration: train & eval → optimise → log """
         if self.budget <= 0:
             return False
 
