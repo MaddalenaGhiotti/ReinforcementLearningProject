@@ -65,7 +65,7 @@ and describing the operations performed. The modules and classes are commented t
 - `requirements.txt` – dependency list
 
 # USAGE 
-In this section, you’ll find how to run the demos for the various classes.
+In this section, you’ll find where to find demos and how to run them.
 
 ## Prerequisites
 
@@ -76,23 +76,24 @@ pip install -r requirements.txt
 ```
 ## Demo 
 
-For each class, open the specified notebook and run the specified cell.
+For each specified folder, open the specified notebook and run the specified cell.
 
-- **AdversarialTraining**  
-  Notebook: `Piri_toRun.ipynb`  
-  Run the ... cell to import `classname` and ...  
-
-- **Doraemon**  
-  Notebook: `main_doraemon.ipynb`  
-  Run the first cell to load `DomainRandDistribution` and `DORAEMON` and try the demo for training, evaluate and print results of the PPO model with Doraemon.
+- **Reinforce and Actor Critic**      
+  Find a demo for reinforce in the **AdversarialTraining** folder.
+  Notebook: `main_Reinforce_ActorCritic.ipynb`
+  Refer to the notebook for previously run cells, plots and results (the notebook runs successfully, but it may take a long time to complete)
 
 - **PPO**  
   Notebook: `main_PPO.ipynb`  
   Run the first two cells to load `PPOTrainer` and try the demo for training and evaluate a PPO model. 
 
-- **Reinforce and Actor Critic**      
-  Notebook: `main_Reinforce_ActorCritic.ipynb`  
-  Run the .... to load `classname` and ....
+- **Doraemon**  
+  Notebook: `main_doraemon.ipynb`  
+  Run the first cell to load `DomainRandDistribution` and `DORAEMON` and try the demo for training, evaluate and print results of the PPO model with Doraemon.
+
+- **AdversarialTraining**  
+  Notebook: `main_AdversarialTraining.ipynb`  
+  Run the first cell to import modules and packages and run the _Train demo_ and _Test demo_ sections for results on reinforce algorithm with adversarial.
 
 
 ## AUTHORS
