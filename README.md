@@ -29,15 +29,15 @@ and describing the operations performed. The modules and classes are commented t
   - `Piri_toRun.ipynb` – (describe contents)
 
 - **Doraemon/**
-  - `doraemon_module.py` – implementation of doraemon module
-  - `main_doraemon.ipynb` – main notebook containing trainings with doraemon
-  - `test_models.ipynb` – notebook containing tests of best models of doraemon
   - **env/**
     - **assets/**
       - `hopper.xml` – xml file of the hopper environment
     - `custom_hopper_doraemon.py` – custom hopper environment for doraemon
     - `mujoco_env.py` – wrappers class for Mujoco environments
   - **models/** – trained models with doraemon
+  - `doraemon_module.py` – implementation of doraemon module
+  - `main_doraemon.ipynb` – main notebook containing trainings with doraemon
+  - `test_models.ipynb` – notebook containing tests of best models of doraemon
 
 - **PPO/**
   - **assets/**
