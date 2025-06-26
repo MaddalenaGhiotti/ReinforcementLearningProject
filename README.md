@@ -12,33 +12,20 @@ The repository is organized into folders, each of which contains a commented mai
 and describing the operations performed. The modules and classes are commented to facilitate understanding of their functionality.
 
 
-- **AdversarialTraining/**
+- **Reinforce_ActorCritic/**
   - **env/**
     - **assets/**
       - `hopper.xml` – xml file of the hopper environment
     - `custom_hopper.py` – custom hopper environment
     - `mujoco_env.py` – wrappers class for Mujoco environments
-  - **models/** – (describe contents)
-  - **plots/** – (describe contents)
-  - **reportFile/** – (describe contents)
-  - `agent.py` – (describe contents)
-  - `classes.py` – (describe contents)
-  - `maddalena_classes_beta_baseline.py` – (describe contents)
-  - `maddalena_module_Reinforce_ActorCritic.py` – (describe contents)
-  - `main_Maddalena.ipynb` – (describe contents)
-  - `Piri_toRun.ipynb` – (describe contents)
-
-- **Doraemon/**
-  - **env/**
-    - **assets/**
-      - `hopper.xml` – xml file of the hopper environment
-    - `custom_hopper_doraemon.py` – custom hopper environment for doraemon
-    - `mujoco_env.py` – wrappers class for Mujoco environments
-  - **models/** – trained models with doraemon
-  - `doraemon_module.py` – implementation of doraemon module
-  - `main_doraemon.ipynb` – main notebook containing trainings with doraemon
-  - `test_models.ipynb` – notebook containing tests of best models of doraemon
-
+  - **models/** – trained models
+  - **plots/** – saved plots
+  - **reportFiles/** – folder containing csv files with training characteristics for each trained model
+  - **results/** – folder containing txt files with actor-critic results
+  - `classes.py` – classes definitions
+  - `module_Reinforce_ActorCritic.py` – implementation of reinforce and actor-critic algorithms
+  - `main_Reinforce_ActorCritic.ipynb` – main notebook containing graphs and experimentation code
+ 
 - **PPO/**
   - **assets/**
     - `hopper.xml` – xml file of the hopper environment
@@ -51,24 +38,34 @@ and describing the operations performed. The modules and classes are commented t
   - `main_PPO.ipynb` – main notebook containing trainings and tests of PPO models
   - `PPO_train_test.py` – class for training and evaluate PPO models
 
-- **Reinforce_ActorCritic/**
+- **Doraemon/**
+  - **env/**
+    - **assets/**
+      - `hopper.xml` – xml file of the hopper environment
+    - `custom_hopper_doraemon.py` – custom hopper environment for doraemon
+    - `mujoco_env.py` – wrappers class for Mujoco environments
+  - **models/** – trained models with doraemon
+  - `doraemon_module.py` – implementation of doraemon module
+  - `main_doraemon.ipynb` – main notebook containing trainings with doraemon
+  - `test_models.ipynb` – notebook containing tests of best models of doraemon
+
+- **AdversarialTraining/**
   - **env/**
     - **assets/**
       - `hopper.xml` – xml file of the hopper environment
     - `custom_hopper.py` – custom hopper environment
     - `mujoco_env.py` – wrappers class for Mujoco environments
-  - **models/** – (describe contents)
-  - **plots/** – (describe contents)
-  - **reportFiles/** – (describe contents)
-  - **results/** – (describe contents)
-  - `classes.py` – (describe contents)
-  - `main_Reinforce_ActorCritic.ipynb` – (describe contents)
-  - `module_Reinforce_ActorCritic.py` – (describe contents)
+  - **models/** – trained models
+  - **plots/** – saved plots
+  - **reportFile/** – folder containing csv files with training characteristics for each trained model
+  - `classes_beta_batch.py` – classes definitions
+  - `module_Reinforce_ActorCritic_beta_batch.py` – implementation of reinforce and actor-critic algorithms with adversarial training features
+  - `main_AdversarialTraining.ipynb` – main notebook containing demos and graphs
 
 - `requirements.txt` – dependency list
 
 # USAGE 
-In this section, you’ll find how to run the demos for the various classes.
+In this section, you’ll find where to find demos and how to run them.
 
 ## Prerequisites
 
@@ -79,23 +76,24 @@ pip install -r requirements.txt
 ```
 ## Demo 
 
-For each class, open the specified notebook and run the specified cell.
+For each specified folder, open the specified notebook and run the specified cell.
 
-- **AdversarialTraining**  
-  Notebook: `Piri_toRun.ipynb`  
-  Run the ... cell to import `classname` and ...  
-
-- **Doraemon**  
-  Notebook: `main_doraemon.ipynb`  
-  Run the first cell to load `DomainRandDistribution` and `DORAEMON` and try the demo for training, evaluate and print results of the PPO model with Doraemon.
+- **Reinforce and Actor Critic**      
+  Find a demo for reinforce in the **AdversarialTraining** folder.
+  Notebook: `main_Reinforce_ActorCritic.ipynb`
+  Refer to the notebook for previously run cells, plots and results (the notebook runs successfully, but it may take a long time to complete)
 
 - **PPO**  
   Notebook: `main_PPO.ipynb`  
   Run the first two cells to load `PPOTrainer` and try the demo for training and evaluate a PPO model. 
 
-- **Reinforce and Actor Critic**      
-  Notebook: `main_Reinforce_ActorCritic.ipynb`  
-  Run the .... to load `classname` and ....
+- **Doraemon**  
+  Notebook: `main_doraemon.ipynb`  
+  Run the first cell to load `DomainRandDistribution` and `DORAEMON` and try the demo for training, evaluate and print results of the PPO model with Doraemon.
+
+- **AdversarialTraining**  
+  Notebook: `main_AdversarialTraining.ipynb`  
+  Run the first cell to import modules and packages and run the _Train demo_ and _Test demo_ sections for results on reinforce algorithm with adversarial.
 
 
 ## AUTHORS
