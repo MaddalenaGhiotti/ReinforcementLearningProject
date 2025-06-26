@@ -1,9 +1,4 @@
-"""Implement:
-	- threshold che aumenta man mano automaticamete, sulla base delle performance
-	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
-	- Plot multiplo
-	- Domain randomization
-"""
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +11,7 @@ import csv
 import torch
 import gym
 from env.custom_hopper import *
-from maddalena_classes_beta_baseline import Agent, Policy, Value
+from classes_beta_batch import Agent, Policy, Value
 
 
 def curriculum_budget(budgets, ep, n_episodes):
