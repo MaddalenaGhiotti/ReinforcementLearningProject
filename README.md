@@ -67,6 +67,37 @@ and describing the operations performed. The modules and classes are commented t
 
 - `requirements.txt` – dependency list
 
+# USAGE 
+In this section, you’ll find how to run the demos for the various classes.
+
+## Prerequisites
+
+First, install the required dependencies listed in `requirements.txt`:
+
+```bash
+pip install -r requirements.txt
+```
+## Demo 
+
+For each class, open the specified notebook and run the specified cell.
+
+- **AdversarialTraining**  
+  Notebook: `Piri_toRun.ipynb`  
+  Run the ... cell to import `classname` and ...  
+
+- **Doraemon**  
+  Notebook: `main_doraemon.ipynb`  
+  Run the first cell to load `DomainRandDistribution` and `DORAEMON` and try the demo for training, evaluate and print results of the PPO model with Doraemon.
+
+- **PPO**  
+  Notebook: `main_PPO.ipynb`  
+  Run the first two cells to load `PPOTrainer` and try the demo for training and evaluate a PPO model. 
+
+- **Reinforce and Actor Critic**      
+  Notebook: `main_Reinforce_ActorCritic.ipynb`  
+  Run the .... to load `classname` and ....
+
+
 ## AUTHORS
 - Maddalena Ghiotti - s332834@studenti.polito.it 
 - Letizia Greco - s336195@studenti.polito.it 
