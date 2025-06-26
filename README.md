@@ -37,6 +37,7 @@ and describing the operations performed. The modules and classes are commented t
   - `mujoco_env.py` – wrappers class for Mujoco environments
   - `main_PPO.ipynb` – main notebook containing trainings and tests of PPO models
   - `PPO_train_test.py` – class for training and evaluate PPO models
+  - `PPOresults` – summary of grid-search results on PPO
 
 - **Doraemon/**
   - **env/**
@@ -63,6 +64,7 @@ and describing the operations performed. The modules and classes are commented t
   - `main_AdversarialTraining.ipynb` – main notebook containing demos and graphs
 
 - `requirements.txt` – dependency list
+- `Paper.txt` – scientific paper related to the project
 
 # USAGE 
 In this section, you’ll find where to find demos and how to run them.
@@ -80,6 +82,7 @@ For each specified folder, open the specified notebook and run the specified cel
 
 - **Reinforce and Actor Critic**      
   Find a demo for reinforce in the **AdversarialTraining** folder.
+  
   Notebook: `main_Reinforce_ActorCritic.ipynb`
   Refer to the notebook for previously run cells, plots and results (the notebook runs successfully, but it may take a long time to complete)
 
