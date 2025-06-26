@@ -1,12 +1,16 @@
 # REINFORCEMENT LEARNING PROJECT 
-## MLDL course 24/25
-### group ID: 48
+**Course:** Machine Learning & Deep Learning (MLDL) 2024/2025  
+**Group ID:** 48
 
-The project is organized into folders, each of which contains a commented main notebook demonstrating how to use the implemented classes
-and describing the operations performed. The modules and classes are commented to facilitate understanding of their functionality.
-
+## Introduction
+This project focuses on training a one-legged robot simulator to walk using Reinforce, Actor-Critic and PPO, and bridges the sim-to-real gap via domain randomization. 
+Additionally, we experimentally evaluated an adversarial training curriculum on the Reinforce algorithm and DORAEMON’s dynamics curriculum on PPO, with the goal of further enhancing robustness.
 
 ## STRUCTURE
+
+The repository is organized into folders, each of which contains a commented main notebook demonstrating how to use the implemented classes
+and describing the operations performed. The modules and classes are commented to facilitate understanding of their functionality.
+
 
 - **AdversarialTraining/**
   - **env/**
