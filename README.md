@@ -8,7 +8,7 @@ Additionally, we experimentally evaluated an adversarial training curriculum on 
 
 ## STRUCTURE
 
-The repository is organized into folders, each of which contains a commented main notebook demonstrating how to use the implemented classes
+The repository is organized into folders, each of which contains a main notebook demonstrating how to use the implemented classes
 and describing the operations performed. The modules and classes are commented to facilitate understanding of their functionality.
 
 
