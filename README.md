@@ -6,7 +6,7 @@ The project is organized into folders, each of which contains a commented main n
 and describing the operations performed. The modules and classes are commented to facilitate understanding of their functionality.
 
 
-STRUCTURE
+## STRUCTURE
 
 AdversarialTraining/
     env/
