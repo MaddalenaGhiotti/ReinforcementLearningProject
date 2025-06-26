@@ -48,7 +48,7 @@ and describing the operations performed. The modules and classes are commented t
     - `PPO_250515_12-46-20.monitor.csv` – csv file with results of PPO trainings
   - `custom_hopper.py` – custom hopper environment for PPO
   - `mujoco_env.py` – wrappers class for Mujoco environments
-  - `main_PPO_train_test.ipynb` – main notebook containing trainings and tests of PPO models
+  - `main_PPO.ipynb` – main notebook containing trainings and tests of PPO models
   - `PPO_train_test.py` – class for training and evaluate PPO models
 
 - **Reinforce_ActorCritic/**
