@@ -15,92 +15,53 @@ from classes_beta_batch import Agent, Policy, Value
 
 
 def curriculum_budget(budgets, ep, n_episodes):
+	"""Select correct adversarial budget given the curriculum and the number of episode"""
 	budgets.append(budgets[-1])
-	interval = n_episodes//5
+	interval = n_episodes//5  #The budget changes 5 times during the training 
 	b=budgets[ep//interval]
 	return b
 
+
 def projection(n_norm, perturbation, budget):
+	"""Compute the n_norm projection of the perturbation on the ball or radius budget"""
 	norm = torch.norm(perturbation, p=n_norm)
 	if norm <= budget:
 		return perturbation
-	if n_norm==1:
-		print('norm 1') #TODO
-	elif n_norm==2:
+	if n_norm==2:
 		return perturbation * (budget / norm)
 	else:
 		print("Invalid norm type.")
 
-#DA TOGLIERE!!	
-def project_l1(delta, d):
-    """
-    Proietta un vettore delta su una palla L1 di raggio d (soft thresholding).
-    """
-    abs_delta = torch.abs(delta)
-    sorted_delta, _ = torch.sort(abs_delta, descending=True)
-    cumulative = torch.cumsum(sorted_delta, dim=0)
 
-    rho = torch.nonzero(sorted_delta * torch.arange(1, len(delta)+1, device=delta.device) > (cumulative - d), as_tuple=False).max()
-    theta = (cumulative[rho] - d) / (rho + 1)
-
-    projected = torch.sign(delta) * torch.clamp(abs_delta - theta, min=0.0)
-    return projected
-
-
-def pgd(action, beta_dist, n_norm=2, max_pgd_steps=1, eps=1e-3, alpha_adv=1, budget = 0.2):  #TODO choose iperparameters 1e-3
+def pgd(action, beta_dist, n_norm=2, max_pgd_steps=1, eps=1e-3, alpha_adv=1, budget = 0.2):
+	"""Perform Projected Gradient Descent from given action and return perturbed action"""
 	epsilon = 1e-6
 	action_adv = action.clone().detach().requires_grad_(True)
-	optimizer = torch.optim.SGD(params=[action_adv],lr=alpha_adv)
-	for i in range(max_pgd_steps):
+	optimizer = torch.optim.SGD(params=[action_adv],lr=alpha_adv)  #Define optimizer
+	#Iterations for action update
+	for _ in range(max_pgd_steps):
+		#Define the pgd loss and step the optiizer
 		loss_adv = beta_dist.log_prob(action_adv).sum()
 		optimizer.zero_grad()
 		loss_adv.backward()
-		#print(action_adv.grad.norm())
-		#torch.nn.utils.clip_grad_norm_(action_adv,0.1)   #Bring gradient norm to 0.1 if bigger
-		action_old=action_adv.clone()
+		action_old=action_adv.clone() #Keep track of previous adversarial action value
 		optimizer.step()
+		#Clip the action to fit in the valid range
 		with torch.no_grad():
 			action_adv.clamp_(epsilon, 1 - epsilon)
+		#Termination if low variation in adversarial action value
 		delta = action_adv - action_old
 		if torch.norm(delta) < eps:
-			#print('break: ',i)
 			break
+	#Perturb agent action and return it
 	perturbation = action_adv-action
-	#print('perturbation:',perturbation)
 	project_pert = projection(n_norm, perturbation, budget)
-	action_pert = (action + project_pert).clamp(epsilon, 1 - epsilon).detach() #.requires_grad_(True)  #Go back to valid interval for actions (-1,1)
-	#action_pert = (action + project_pert).clamp(0,1).detach()
-	#print()
+	action_pert = (action + project_pert).clamp(epsilon, 1 - epsilon).detach()
 	return action_pert
-
-'''
-def pgd2(action, normal_dist, n_norm=2, max_pgd_steps=10, eps=1e-3, alpha_adv=1e-3, budget = 0.2):  #TODO choose iperparameters
-	action_prev = action.clone().detach().requires_grad_(True)   #TODO understand
-	for i in range(max_pgd_steps):
-		log_prob = normal_dist.log_prob(action_prev).sum() #TODO
-		loss_adv=-log_prob
-		if action_prev.grad is not None:
-			action_prev.grad.data.zero_()
-		loss_adv.backward()
-		print('passed')
-		action_next = action_prev - alpha_adv * action_prev.grad  #.sign() #TODO
-		delta = action_next - action_prev
-		if torch.norm(delta) < eps:
-			print('break')
-			break
-		print('no termination')
-		action_prev=action_next.detach().requires_grad_(True)
-	print('out')
-	perturbation = action_prev-action
-	project_pert = projection(n_norm, perturbation, budget)
-	action_pert = (action + project_pert).clamp(-1,1).detach().requires_grad_(True)  #Go back to valid interval for actions (-1,1): .clamp(-1,1) (?)
-	return action_pert
-'''
 
 
 def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, batch_sz=1, gamma=0.99, alpha=0.9, optim_lr=1e-3, layer_size=64, pert_bound=None, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
-	"""Train an RL agent on the OpenAI Gym Hopper environment using
-    REINFORCE or Actor-critic algorithms"""
+	"""Train an RL agent on the OpenAI Gym Hopper environment using REINFORCE or Actor-critic algorithms"""
 	# Seed setting
 	random.seed(random_state)
 	np.random.seed(random_state)
@@ -187,20 +148,17 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 		#Build trajectory
 		while not done:  # Loop until the episode is over
-			for name, param in agent.policy.named_parameters():
-				if torch.isnan(param).any():
-					print(f"NaN in {name} before get_action")
 			action, action_probabilities, beta_dist = agent.get_action(state)
+			#If adversarial training
 			if pert_bound:
-				#action = torch.clamp(action, min=-1, max=1) ########################################################## Verificare!
-				b = curriculum_budget(pert_bound, episode, n_episodes)
-				action = pgd(action.detach(), beta_dist, budget = b)
-				action_probabilities = agent.get_probs(state, action)
+				b = curriculum_budget(pert_bound, episode, n_episodes) #Find current budget
+				action = pgd(action.detach(), beta_dist, budget = b) #Find perturbed action
+				action_probabilities = agent.get_probs(state, action) #Compute log prob based on perturbed action
 			previous_state = state
-			action = action*2-1  ######################################################REMOVE!!!
+			action = action*2-1  #Rescale to fit the action space
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
-			#Update policy
+			#Update policy if Actor-Critic
 			if type_alg!=0:
 				agent.update_policy()
 			train_reward += reward
@@ -218,11 +176,12 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			torch.save(agent.policy.state_dict(), f"models/{model_name}_t{episode}.mdl")
 			threshold_bool = True
 
-		#Update policy
+		#Update policy if REINFORCE
 		start2_time = time.time()
 		if type_alg==0:
-			if episode%30000==0 and episode!=0:
-				agent.batch_sz+=10
+			#Increase the batch size if needed
+			#if episode%30000==0 and episode!=0:
+		    #		agent.batch_sz+=10
 			agent.update_policy()
 		
 		#Save data
@@ -269,7 +228,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 ##############################################################################
 
-def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, pert_bound=None, random_state=42, device='cpu', print_res=True):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=50, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, pert_bound=None, random_state=42, device='cpu', print_res=True):
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
@@ -301,7 +260,7 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 	policy.load_state_dict(torch.load('models/'+model), strict=True)
 
 	#Create agent
-	agent = Agent(type_alg, policy, device=device, gamma=gamma, optim_lr=optim_lr)  #TODO params: type_alg, policy, value = None, device='cpu', baseline=0
+	agent = Agent(type_alg, policy, device=device, gamma=gamma, optim_lr=optim_lr)
 
 	returns = []
 	#Iterate over episodes
@@ -313,10 +272,11 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 		#Build trajectory
 		while not done:
 			action, _, beta_dist = agent.get_action(state, evaluation=True)
+			#If adversarial training
 			if pert_bound:
-				action = torch.clamp(action, min=0, max=1) ########################################################## Verificare!
-				action = pgd(action.detach(), beta_dist, budget = pert_bound)
-			action = action*2-1
+				action = torch.clamp(action, min=0, max=1)
+				action = pgd(action.detach(), beta_dist, budget = pert_bound) #Find perturbed action
+			action = action*2-1 #Rescale action to fit action space
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			if render:  
 				env.render()  #Show rendering
@@ -332,7 +292,7 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 ##############################################################################
 
 def plot_returns_times(save_every,return_array, average_array, beginning_array, points, name, metric):
-	"""Plot progress of return over episodes"""
+	"""Plot progress of return or time over episodes"""
 	num_returns = len(return_array)
 	numbers_array = np.arange(save_every, save_every * (num_returns + 1), save_every)
 	plt.figure(figsize=(12,10))

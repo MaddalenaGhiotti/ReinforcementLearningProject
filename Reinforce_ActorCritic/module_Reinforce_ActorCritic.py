@@ -1,9 +1,4 @@
-"""Implement:
-	- threshold che aumenta man mano automaticamete, sulla base delle performance
-	- Salvataggio del progresso dell'optimizer per tuning su modello pre-trainato (x)
-	- Plot multiplo
-	- Domain randomization
-"""
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
@@ -21,8 +16,7 @@ from classes import Agent, Policy, Value
 
 
 def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, gamma=0.99, alpha=0.9, optim_lr=1e-3, layer_size=64, starting_threshold=700, csv_name='results.csv', save_every=75, print_every=1e4, print_name=True, plot=True, random_state=42, device='cpu'):
-	"""Train an RL agent on the OpenAI Gym Hopper environment using
-    REINFORCE or Actor-critic algorithms"""
+	"""Train an RL agent on the OpenAI Gym Hopper environment using REINFORCE or Actor-critic algorithms"""
 	# Seed setting
 	random.seed(random_state)
 	np.random.seed(random_state)
@@ -113,7 +107,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			previous_state = state
 			state, reward, done, info = env.step(action.detach().cpu().numpy())
 			agent.store_outcome(previous_state, state, action_probabilities, reward, done)
-			#Update policy
+			#Update policy if Actor-Critic
 			if type_alg!=0:
 				agent.update_policy()
 			train_reward += reward
@@ -130,7 +124,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			torch.save(agent.policy.state_dict(), f"models/{model_name}_t{episode}.mdl")
 			threshold_bool = True
 
-		#Update policy
+		#Update policy if REINFORCE
 		start2_time = time.time()
 		if type_alg==0:
 			start2_time = time.time()
@@ -138,10 +132,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 			update_time = time.time() - start2_time
 		else:
 			update_time = 0.0
-
 		episode_time = traject_time + update_time
-
-
 		
 		#Save data
 		episode_time = traject_time + (time.time()-start2_time)
@@ -187,7 +178,7 @@ def train(type_alg, hopper='S', n_episodes=5e4, trained_model=None, baseline=0, 
 
 ##############################################################################
 
-def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, random_state=42, device='cpu'):  ### #TODO CHANGE DEFAULT render TO FALSE and episodes to 50
+def test(type_alg, model, hopper='T', n_episodes=50, render=False, gamma=0.99, optim_lr=1e-3, layer_size=64, random_state=42, device='cpu'):
 	"""Test an RL agent on the OpenAI Gym Hopper environment"""
 
 	# Seed setting
@@ -218,7 +209,7 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 	policy.load_state_dict(torch.load('models/'+model), strict=True)
 
 	#Create agent
-	agent = Agent(type_alg, policy, device=device, gamma=gamma, optim_lr=optim_lr)  #TODO params: type_alg, policy, value = None, device='cpu', baseline=0
+	agent = Agent(type_alg, policy, device=device, gamma=gamma, optim_lr=optim_lr)
 
 	returns = []
 	#Iterate over episodes
@@ -245,7 +236,7 @@ def test(type_alg, model, hopper='T', n_episodes=10, render=False, gamma=0.99, o
 ##############################################################################
 
 def plot_returns_times(save_every,return_array, average_array, beginning_array, points, name, metric):
-	"""Plot progress of return over episodes"""
+	"""Plot progress of return or time over episodes"""
 	num_returns = len(return_array)
 	numbers_array = np.arange(save_every, save_every * (num_returns + 1), save_every)
 	plt.figure(figsize=(12,10))
