@@ -80,9 +80,8 @@ pip install -r requirements.txt
 
 For each specified folder, open the specified notebook and run the specified cell.
 
-- **Reinforce and Actor Critic**      
+- **Reinforce and Actor Critic**
   Find a demo for reinforce in the **AdversarialTraining** folder.
-  
   Notebook: `main_Reinforce_ActorCritic.ipynb`
   Refer to the notebook for previously run cells, plots and results (the notebook runs successfully, but it may take a long time to complete)
 
@@ -96,7 +95,7 @@ For each specified folder, open the specified notebook and run the specified cel
 
 - **AdversarialTraining**  
   Notebook: `main_AdversarialTraining.ipynb`  
-  Run the first cell to import modules and packages and run the _Train demo_ and _Test demo_ sections for results on reinforce algorithm with adversarial.
+  Run the first cell to import modules and packages and run the _Train demo_ and _Test demo_ sections for results on reinforce algorithm with adversarial. Refer to the rest of the notebook for previously run cells, plots and results.
 
 
 ## AUTHORS
